@@ -1,6 +1,5 @@
 # Single-point-Water-bridge
 Perform a comparative and integrative analysis for a new hybrid algorithm that adapts tunnel-search concepts from CAVER to water bridge detection.
-Corrected version: "I want you to summarize all these ideas into a prompt so I can give it to an AI agent like Jules to perform the development of this new code."
 
 **Objective:** Develop a standalone Python package that implements a hybrid algorithm merging CAVER's tunnel-search logic with continuous water bridge detection to explore open-ended, water-mediated hydrogen-bond networks in molecular dynamics trajectories.
 
