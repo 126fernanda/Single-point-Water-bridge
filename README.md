@@ -1,31 +1,83 @@
-# Single-point-Water-bridge
-Perform a comparative and integrative analysis for a new hybrid algorithm that adapts tunnel-search concepts from CAVER to water bridge detection.
+# water_bridges-Nw
 
-**Objective:** Develop a standalone Python package that implements a hybrid algorithm merging CAVER's tunnel-search logic with continuous water bridge detection to explore open-ended, water-mediated hydrogen-bond networks in molecular dynamics trajectories.
+`water_bridges-Nw` is a standalone Python package that implements a hybrid algorithm merging CAVER's tunnel-search logic with continuous water bridge detection. It is designed to explore open-ended, water-mediated hydrogen-bond networks in molecular dynamics trajectories.
 
-**Technical Specifications & Algorithm Design:**
+## Features and Utilities
 
-1.  **Framework & Data Parsing:** * Use `MDAnalysis` to parse topology and trajectory data, handle periodic boundary conditions, and perform initial coarse distance filtering between selections.
-    * Use `NetworkX` to construct the adjacency matrix and execute graph traversal algorithms.
+*   **Open-Ended Network Traversal:** Employs a breadth-first search (BFS) algorithm originating from a single user-defined root coordinate. The exploration expands radially into the solvent and organically stops based on path probability thresholds and maximum depth.
+*   **Continuous Switching Probabilities:** Replaces rigid geometric cutoffs (angles/distances) with continuous, fractional probability functions for hydrogen bonds, rewarding highly stable connections.
+*   **Two-Phase Execution Architecture:**
+    *   **Phase 1 (Calculate):** Processes trajectory data frame-by-frame using `MDAnalysis` and `NetworkX` to evaluate potential edges and aggregate statistical pathways, saving the raw data efficiently.
+    *   **Phase 2 (Visualize):** Parses the calculated data and seamlessly generates visualization scripts without hogging memory.
+*   **High-Performance Visualizations:** Decoupled visualization logic exports Python (PyMOL CGO) and Tcl (VMD) scripts that render complex pathway topologies as cylinders. Supports full "density" aggregation across the trajectory or distinct frame-by-frame rendering.
 
-2.  **Graph Representation:** * Nodes: Individual water molecules and protein/ligand hydrogen-bond donors or acceptors.
-    * Edges: Hydrogen bonds connecting these nodes.
+## Installation
 
-3.  **Search Strategy:** * Implement Dijkstra's algorithm originating from a single, user-defined root coordinate (e.g., a specific catalytic residue or ligand atom). 
-    * The algorithm must explore outward radially without requiring a predefined target endpoint, diverging from standard shortest-path implementations.
+The package requires Python 3.8 or higher. You can install `water_bridges-Nw` directly via pip.
 
-4.  **Edge Evaluation (Two-Stage Filter):**
-    * *Coarse Filter:* Apply a strict geometric maximum heavy-atom distance cutoff (e.g., 3.5 Å) to rapidly define potential interacting pairs.
-    * *Fine Evaluation (Probabilistic):* Replace binary angle/distance cutoffs with continuous mathematical switching functions. Calculate a fractional connection probability ($P_i$) for each hydrogen bond based on optimal geometries.
+To install it from the repository root:
 
-5.  **Pruning Rules:**
-    * *Depth Limit:* Enforce a maximum path length (number of intermediate waters) to prevent infinite loops into the bulk solvent.
-    * *Energy/Probability Threshold:* Terminate branch expansion if the cumulative path probability ($\prod P_i$) falls below a user-defined minimum threshold.
+```bash
+pip install .
+```
 
-6.  **Scoring Function:** * Rank identified pathways using a path cost function defined as $-\ln(\prod P_{i})$. 
-    * This formulation penalizes longer paths while rewarding highly stable connections, mirroring the theoretical basis of CAVER's continuous throughput calculation ($\int_{0}^{L}r(l)^{-2}dl$)[cite: 1].
+For development mode, run:
 
-**Deliverables:**
-* Modular Python source code (separating parsing, graph construction, pathfinding, and scoring logic).
-* A Command-Line Interface (CLI) accepting topology files, trajectory files, the root coordinate, and configurable thresholds (max depth, probability cutoff).
-* Export functionality to output the ranked pathways in a format compatible with visualization tools like VMD or PyMOL (e.g., generating pseudo-atoms or connection scripts).
+```bash
+pip install -e .
+```
+
+## Usage
+
+The package is run via a unified Command-Line Interface (CLI): `water_bridges_nw`.
+
+### 1. Calculation Phase
+Analyze your MD trajectory to discover water-mediated networks. By default, the output is saved to `results.json`.
+
+```bash
+water_bridges_nw calculate \
+  --topo my_topology.pdb \
+  --traj my_trajectory.xtc \
+  --root "resname LIG and name O1" \
+  --stride 10 \
+  --max_depth 5 \
+  --prob_threshold 0.001
+```
+
+*Options:*
+*   `--topo`: Topology file (.pdb, .tpr, etc.)
+*   `--traj`: Trajectory file (.xtc, .dcd). If omitted, evaluates only the topology.
+*   `--root`: Standard MDAnalysis atom selection string defining the starting root coordinate.
+*   `--water`: Selection string for solvent (default: `"resname SOL or resname WAT or resname HOH"`).
+*   `--stride`: Frame stride to process. *(Note: A warning is issued if the evaluated frames exceed 1000 due to memory consumption)*
+*   `--max_depth`: Maximum chain length of sequential waters.
+*   `--prob_threshold`: Cumulative probabilistic threshold; paths falling below this probability are pruned.
+
+### 2. Visualization Phase
+Generate rendering scripts from your calculation output.
+
+**Generate a density map (all frames overlaid) for PyMOL:**
+```bash
+water_bridges_nw visualize \
+  --data results.json \
+  --format pymol \
+  --mode density \
+  --output my_density_network.py
+```
+
+**Generate a pathway view for a specific frame in VMD:**
+```bash
+water_bridges_nw visualize \
+  --data results.json \
+  --format vmd \
+  --mode frame \
+  --frame 10 \
+  --output frame_10_network.tcl
+```
+
+*Options:*
+*   `--data`: The JSON output generated by the `calculate` subcommand.
+*   `--format`: Target visualization software (`vmd` or `pymol`).
+*   `--mode`: Either `density` (overlays pathways across all analyzed frames) or `frame` (extracts a single frame).
+*   `--frame`: Index of the frame to visualize (required if `--mode frame` is used).
+*   `--output`: Name of the script to be saved.
