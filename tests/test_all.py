@@ -57,8 +57,8 @@ class TestCoreFunctions(unittest.TestCase):
         g.add_node(1)
         g.add_node(2)
 
-        g.add_edge(0, 1, prob=0.8)
-        g.add_edge(1, 2, prob=0.8)
+        g.add_edge(0, 1, prob=0.8, weight=-np.log(0.8))
+        g.add_edge(1, 2, prob=0.8, weight=-np.log(0.8))
 
         paths = traverse_network(g, [0], max_depth=5, prob_threshold=0.5)
 
@@ -79,25 +79,24 @@ class TestCoreFunctions(unittest.TestCase):
 
 class TestVisualization(unittest.TestCase):
     def test_export_vmd_script(self):
-        data = {
-            "frames": {
-                "0": [
-                    {
-                        "coords": [[0,0,0], [1,1,1]]
-                    }
-                ]
-            }
-        }
+        # We need to mock a jsonl file now since visualization reads files directly
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jsonl", mode='w') as f_json:
+            json_name = f_json.name
+            # Write mock frame data
+            f_json.write('{"type": "metadata"}\n')
+            f_json.write('{"type": "frame", "frame_idx": 0, "paths": [{"nodes": [0, 1], "coords": [[0,0,0], [1,1,1]]}]}\n')
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".tcl") as f:
             temp_name = f.name
 
-        export_vmd_script(data, output_file=temp_name, mode="frame", frame_idx=0)
+        export_vmd_script(json_name, output_file=temp_name, mode="frame", frame_idx=0)
 
         with open(temp_name, 'r') as f:
             content = f.read()
-            self.assertIn("graphics top cylinder {0.000 0.000 0.000} {1.000 1.000 1.000}", content)
+            self.assertIn("mol selection \"index 0 1\"", content)
 
         os.remove(temp_name)
+        os.remove(json_name)
 
 if __name__ == '__main__':
     unittest.main()
