@@ -138,18 +138,17 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
 
         paths = frames[str(frame_idx)]
 
-        all_indices = set()
+        all_ids = set()
         for path in paths:
-            all_indices.update(path["nodes"])
-
-        # Chimera uses 0-based indexing but standard selection commands use ID.
-        # Best to just write a simple .cmd script for Chimera if it's dynamic selection.
-        # But let's generate a .py script that runs chimera commands.
+            # Use atom_ids if available (from analysis.py upgrade), otherwise fallback to indices+1
+            if "atom_ids" in path:
+                all_ids.update(path["atom_ids"])
+            else:
+                all_ids.update(i+1 for i in path["nodes"])
 
         with open(output_file, 'w') as f:
             f.write("from chimera import runCommand\n")
-            # MDAnalysis index usually maps to Chimera serial numbers (1-based), so add 1
-            sel_str = ",".join(str(i+1) for i in all_indices)
+            sel_str = ",".join(str(i) for i in all_ids)
             f.write(f"runCommand('show @serialNumber={sel_str}')\n")
             f.write(f"runCommand('repr stick @serialNumber={sel_str}')\n")
 
