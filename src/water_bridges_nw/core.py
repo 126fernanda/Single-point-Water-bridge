@@ -1,7 +1,7 @@
 import numpy as np
 import MDAnalysis as mda
 import networkx as nx
-from MDAnalysis.lib.distances import capped_distance, calc_bonds
+from MDAnalysis.lib.distances import capped_distance, calc_bonds, distance_array
 from .math_utils import calculate_hbond_probability
 
 def build_graph(u, water_atoms, root_atoms, max_distance=3.5, max_depth=5):
@@ -101,29 +101,13 @@ def compute_edge_probabilities(g, u):
             mod_rOiH = 1.0
             mod_rOjH = mod_rOO - 1.0
         else:
-            min_diff = float('inf')
-            best_rOiH = 1.0
-            best_rOjH = mod_rOO - 1.0
+            p_hs = np.array([h.position for h in all_hs])
+            d1_array = distance_array(np.array([a1.position]), p_hs, box=u.dimensions)[0]
+            d2_array = distance_array(np.array([a2.position]), p_hs, box=u.dimensions)[0]
 
-            p1 = a1.position
-            p2 = a2.position
-
-            for h in all_hs:
-                ph = h.position
-                if u.dimensions is not None:
-                    d1 = calc_bonds(p1, ph, box=u.dimensions)
-                    d2 = calc_bonds(p2, ph, box=u.dimensions)
-                else:
-                    d1 = np.linalg.norm(p1 - ph)
-                    d2 = np.linalg.norm(p2 - ph)
-
-                if (d1 + d2) < min_diff:
-                    min_diff = d1 + d2
-                    best_rOiH = d1
-                    best_rOjH = d2
-
-            mod_rOiH = best_rOiH
-            mod_rOjH = best_rOjH
+            best_idx = np.argmin(d1_array + d2_array)
+            mod_rOiH = d1_array[best_idx]
+            mod_rOjH = d2_array[best_idx]
 
         prob = calculate_hbond_probability(mod_rOO, mod_rOiH, mod_rOjH)
 

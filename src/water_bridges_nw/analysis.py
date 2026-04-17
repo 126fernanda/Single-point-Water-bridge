@@ -43,8 +43,8 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
     root_atoms = u.select_atoms(root_sel)
 
     # Global stats
-    all_path_lengths = []
-    all_path_probs = []
+    total_length_sum = 0
+    total_prob_sum = 0
     total_paths = 0
 
     out_f = open(output_file, 'w')
@@ -89,8 +89,8 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
         frame_paths_data = []
         for path_indices, prob in paths:
             path_len = len(path_indices) - 1
-            all_path_lengths.append(path_len)
-            all_path_probs.append(prob)
+            total_length_sum += path_len
+            total_prob_sum += prob
 
             coords = []
             distances = []
@@ -101,8 +101,12 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
 
             avg_oo = float(np.mean(distances)) if distances else 0.0
 
+            # Also store explicit atom ids for Chimera indexing
+            atom_ids = [int(u.atoms[n].id) for n in path_indices]
+
             frame_paths_data.append({
                 "nodes": [int(n) for n in path_indices],
+                "atom_ids": atom_ids,
                 "coords": coords,
                 "probability": float(prob),
                 "length": path_len,
@@ -122,8 +126,8 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
         csv_f.close()
         logger.info(f"CSV saved to {csv_file}")
 
-    avg_length = np.mean(all_path_lengths) if all_path_lengths else 0.0
-    avg_prob = np.mean(all_path_probs) if all_path_probs else 0.0
+    avg_length = float(total_length_sum) / total_paths if total_paths > 0 else 0.0
+    avg_prob = float(total_prob_sum) / total_paths if total_paths > 0 else 0.0
 
     logger.info("=== Analysis Complete ===")
     logger.info(f"Total paths found across analyzed frames: {total_paths}")
