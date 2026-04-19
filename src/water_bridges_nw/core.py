@@ -89,7 +89,8 @@ def compute_edge_probabilities(g, u):
             return []
 
         hs_positions = np.array([h.position for h in candidate_hs])
-        dists = calc_bonds(atom.position, hs_positions, box=u.dimensions)
+        # Use distance_array for 1-to-many distance calculation
+        dists = distance_array(np.array([atom.position]), hs_positions, box=u.dimensions)[0]
 
         bonded_hs = [candidate_hs[i] for i, d in enumerate(dists) if d <= 1.2]
 
