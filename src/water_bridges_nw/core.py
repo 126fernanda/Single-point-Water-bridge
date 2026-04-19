@@ -82,9 +82,19 @@ def compute_edge_probabilities(g, u):
     def get_hydrogens(atom):
         if atom.index in h_cache:
             return h_cache[atom.index]
-        hs = [a for a in atom.residue.atoms if a.name.startswith('H') or a.type == 'H']
-        h_cache[atom.index] = hs
-        return hs
+
+        candidate_hs = [a for a in atom.residue.atoms if a.name.startswith('H') or a.type == 'H']
+        if not candidate_hs:
+            h_cache[atom.index] = []
+            return []
+
+        hs_positions = np.array([h.position for h in candidate_hs])
+        dists = calc_bonds(atom.position, hs_positions, box=u.dimensions)
+
+        bonded_hs = [candidate_hs[i] for i, d in enumerate(dists) if d <= 1.2]
+
+        h_cache[atom.index] = bonded_hs
+        return bonded_hs
 
     for u_node, v_node, data in g.edges(data=True):
         a1 = u.atoms[u_node]
@@ -145,10 +155,32 @@ def compute_edge_probabilities(g, u):
                 angle_deg = np.degrees(angle)
 
                 if angle_deg >= 120.0:
+                    # Determine appropriate r0_oo based on heavy atom elements
+                    try:
+                        e1 = a1.element
+                    except AttributeError:
+                        e1 = a1.name[0]
+                    try:
+                        e2 = a2.element
+                    except AttributeError:
+                        e2 = a2.name[0]
+
+                    e1 = e1.upper()
+                    e2 = e2.upper()
+
+                    if 'S' in (e1, e2):
+                        r0_oo = 3.3
+                    elif (e1, e2) in (('N', 'N'),):
+                        r0_oo = 3.0
+                    elif (e1, e2) in (('N', 'O'), ('O', 'N')):
+                        r0_oo = 2.9
+                    else: # O-O and defaults
+                        r0_oo = 2.7
+
                     # Valid H-bond geometry. Calculate continuous probability.
                     mod_rOiH = d1_array[idx]
                     mod_rOjH = d2_array[idx]
-                    p = calculate_hbond_probability(mod_rOO, mod_rOiH, mod_rOjH)
+                    p = calculate_hbond_probability(mod_rOO, mod_rOiH, mod_rOjH, r0_oo=r0_oo)
                     if p > best_prob:
                         best_prob = p
 
