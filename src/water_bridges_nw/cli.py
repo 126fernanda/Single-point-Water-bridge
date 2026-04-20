@@ -31,6 +31,8 @@ def main():
     calc_parser.add_argument("--coarse_cutoff", type=float, default=3.5, help="Coarse distance cutoff (Angstroms) for initial graph building.")
     calc_parser.add_argument("--output", default="results.jsonl", help="Output JSON Lines file for storing the raw network data.")
     calc_parser.add_argument("--csv", default=None, help="Optional output CSV file for storing human-readable summary data.")
+    calc_parser.add_argument("--cluster", action="store_true", help="Enable temporal clustering of pathways post-analysis.")
+    calc_parser.add_argument("--cluster_threshold", type=float, default=3.5, help="Spatial distance threshold for pathway clustering (Angstroms).")
 
     # --- Visualize Subcommand ---
     vis_parser = subparsers.add_parser("visualize", help="Generate visualization scripts from calculation results.")
@@ -54,7 +56,9 @@ def main():
             prob_threshold=args.prob_threshold,
             coarse_cutoff=args.coarse_cutoff,
             output_file=args.output,
-            csv_file=args.csv
+            csv_file=args.csv,
+            cluster=args.cluster,
+            cluster_threshold=args.cluster_threshold
         )
     elif args.command == "visualize":
         run_visualization(

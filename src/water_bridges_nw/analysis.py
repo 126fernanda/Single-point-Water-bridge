@@ -10,9 +10,123 @@ from .core import build_graph, compute_edge_probabilities, traverse_network
 
 logger = logging.getLogger(__name__)
 
+def cluster_pathways(data_file, threshold=3.5, output_file="clustered_pathways.json"):
+    """
+    Reads JSONL trajectory data and performs temporal clustering to identify collective pathways.
+    """
+    logger.info("Starting temporal clustering of pathways...")
+    import scipy.spatial.distance as ssd
+    from scipy.cluster.hierarchy import linkage, fcluster
+
+    paths = []
+    total_frames = 0
+    frame_set = set()
+
+    # Read paths into memory for clustering
+    with open(data_file, 'r') as f:
+        for line in f:
+            obj = json.loads(line)
+            if obj.get('type') == 'metadata':
+                total_frames = obj.get('n_frames_analyzed', 0)
+            elif obj.get('type') == 'frame':
+                frame_idx = obj['frame_idx']
+                frame_set.add(frame_idx)
+                for p in obj['paths']:
+                    paths.append({
+                        'frame': frame_idx,
+                        'nodes': p['nodes'],
+                        'coords': np.array(p['coords']),
+                        'probability': p['probability'],
+                        'length': p['length']
+                    })
+
+    n_paths = len(paths)
+    if total_frames == 0:
+        total_frames = len(frame_set)
+
+    if n_paths == 0:
+        logger.info("No paths found to cluster.")
+        return
+
+    if n_paths == 1:
+        logger.info("Only 1 path found. Skipping clustering.")
+        return
+
+    logger.info(f"Computing pairwise directed Hausdorff distance matrix for {n_paths} pathways...")
+
+    # Compute condensed distance matrix
+    # Note: directed_hausdorff returns (dist, index1, index2). We just need the distance.
+    # Because lengths differ, Hausdorff is robust. We use the max of the two directed distances to make it symmetric.
+    dist_matrix = np.zeros(n_paths * (n_paths - 1) // 2)
+    idx = 0
+    for i in range(n_paths):
+        for j in range(i + 1, n_paths):
+            u_coords = paths[i]['coords']
+            v_coords = paths[j]['coords']
+            d1 = ssd.directed_hausdorff(u_coords, v_coords)[0]
+            d2 = ssd.directed_hausdorff(v_coords, u_coords)[0]
+            dist_matrix[idx] = max(d1, d2)
+            idx += 1
+
+    logger.info("Performing hierarchical average-link clustering...")
+    Z = linkage(dist_matrix, method='average')
+    labels = fcluster(Z, t=threshold, criterion='distance')
+
+    unique_labels = set(labels)
+    n_clusters = len(unique_labels)
+    logger.info(f"Identified {n_clusters} unique collective pathways.")
+
+    clusters_data = []
+
+    for label in unique_labels:
+        cluster_indices = np.where(labels == label)[0]
+        cluster_paths = [paths[i] for i in cluster_indices]
+
+        # Calculate cluster occupancy
+        cluster_frames = set(p['frame'] for p in cluster_paths)
+        occupancy = len(cluster_frames) / total_frames if total_frames > 0 else 0.0
+
+        # Calculate average probability
+        avg_prob = np.mean([p['probability'] for p in cluster_paths])
+
+        # Find the medoid (path with minimum average distance to all other paths in cluster)
+        # For simplicity and speed if cluster is large, we can just pick the first one, or do a small inner loop
+        if len(cluster_indices) <= 2:
+            medoid_coords = cluster_paths[0]['coords'].tolist()
+        else:
+            min_dist_sum = float('inf')
+            medoid_idx = 0
+            for i, p1 in enumerate(cluster_paths):
+                dist_sum = 0
+                for p2 in cluster_paths:
+                    d1 = ssd.directed_hausdorff(p1['coords'], p2['coords'])[0]
+                    d2 = ssd.directed_hausdorff(p2['coords'], p1['coords'])[0]
+                    dist_sum += max(d1, d2)
+                if dist_sum < min_dist_sum:
+                    min_dist_sum = dist_sum
+                    medoid_idx = i
+            medoid_coords = cluster_paths[medoid_idx]['coords'].tolist()
+
+        clusters_data.append({
+            "cluster_id": int(label),
+            "size": len(cluster_indices),
+            "occupancy": float(occupancy),
+            "avg_probability": float(avg_prob),
+            "medoid_coords": medoid_coords
+        })
+
+    # Sort by occupancy descending
+    clusters_data.sort(key=lambda x: x['occupancy'], reverse=True)
+
+    with open(output_file, 'w') as f:
+        json.dump(clusters_data, f, indent=2)
+
+    logger.info(f"Clustering complete. Results saved to {output_file}")
+
+
 def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resname WAT or resname HOH",
                  stride=1, max_depth=10, min_depth=1, prob_threshold=1e-3, coarse_cutoff=3.5,
-                 output_file="results.jsonl", csv_file=None):
+                 output_file="results.jsonl", csv_file=None, cluster=False, cluster_threshold=3.5):
     """
     Iterates over the trajectory and aggregates network pathways.
     Streams output as JSON Lines (JSONL) to prevent memory exhaustion,
@@ -154,5 +268,8 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
     logger.info(f"Average path length (depth): {avg_length:.2f}")
     logger.info(f"Average cumulative probability: {avg_prob:.4f}")
     logger.info(f"Results saved to {output_file}")
+
+    if cluster:
+        cluster_pathways(data_file=output_file, threshold=cluster_threshold)
 
     return None
