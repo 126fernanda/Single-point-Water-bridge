@@ -9,6 +9,8 @@
     *   **Heavy-Atom Geometry:** Tunable $r_{OO}$ distance factors.
     *   **Angular Alignment:** Rewards linear donor-hydrogen-acceptor arrangements.
     *   **Chemical Specificity:** Adjusts bridge probability based on atom elements (e.g., Nitrogen vs. Oxygen vs. Sulfur).
+*   **Dijkstra-Driven Path Optimization:** Employs a weighted graph traversal to determine the "Most Probable Path" for any given water bridge network. By converting probabilities into logarithmic weights, it effectively prunes low-probability noise to focus on chemically significant water-mediated interactions.
+*   **Temporal Bridge Clustering:** Includes a post-processing module that uses Directed Hausdorff Distances to perform hierarchical clustering of pathways. This allows for the identification of "Collective Pathways" persistent bridge networks that appear across multiple frames, calculating their occupancy and defining representative clusters.
 *   **Two-Phase Execution Architecture:**
     *   **Phase 1 (Calculate):** Processes trajectory data frame-by-frame using `MDAnalysis` and `NetworkX` to evaluate potential edges and aggregate statistical pathways. Employs a zero-memory-growth O(1) tracking architecture, streaming outputs safely via `JSON Lines (.jsonl)` and structured `.csv` to prevent RAM exhaustion.
     *   **Phase 2 (Visualize):** Parses the calculated data and seamlessly generates visualization scripts.
