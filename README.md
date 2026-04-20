@@ -40,18 +40,24 @@ water_bridges_nw calculate \
   --traj my_trajectory.xtc \
   --root "resname LIG and name O1" \
   --stride 10 \
-  --max_depth 5 \
-  --prob_threshold 0.001
+  --max_depth 10 \
+  --min_depth 3 \
+  --prob_threshold 0.001 \
+  --output custom_results.jsonl \
+  --csv custom_summary.csv
 ```
 
 *Options:*
 *   `--topo`: Topology file (.pdb, .tpr, etc.)
 *   `--traj`: Trajectory file (.xtc, .dcd). If omitted, evaluates only the topology.
-*   `--root`: Standard MDAnalysis atom selection string defining the starting root coordinate.
+*   `--root`: Standard MDAnalysis atom selection string defining the starting root coordinate. Supports `resname`, `resid`, and `name` strings.
 *   `--water`: Selection string for solvent (default: `"resname SOL or resname WAT or resname HOH"`).
-*   `--stride`: Frame stride to process. *(Note: A warning is issued if the evaluated frames exceed 1000 due to memory consumption)*
-*   `--max_depth`: Maximum chain length of sequential waters.
+*   `--stride`: Frame stride to process. *(Note: A warning is issued if the evaluated frames exceed 1000)*
+*   `--max_depth`: Maximum chain length of sequential waters (default: `10`).
+*   `--min_depth`: Minimum chain length filter. Shorter paths will be discarded (default: `1`).
 *   `--prob_threshold`: Cumulative probabilistic threshold; paths falling below this probability are pruned.
+*   `--output`: Custom filename for the detailed `JSON Lines` output (default: `results.jsonl`).
+*   `--csv`: Optional custom filename to generate a structured, human-readable summary of the detected paths.
 
 ### 2. Visualization Phase
 Generate rendering scripts from your calculation output.
@@ -59,7 +65,7 @@ Generate rendering scripts from your calculation output.
 **Generate a density map (all frames overlaid) for PyMOL:**
 ```bash
 water_bridges_nw visualize \
-  --data results.json \
+  --data custom_results.jsonl \
   --format pymol \
   --mode density \
   --output my_density_network.py
@@ -68,7 +74,7 @@ water_bridges_nw visualize \
 **Generate a pathway view for a specific frame in VMD:**
 ```bash
 water_bridges_nw visualize \
-  --data results.jsonl \
+  --data custom_results.jsonl \
   --format vmd \
   --mode frame \
   --frame 10 \
@@ -78,7 +84,7 @@ water_bridges_nw visualize \
 **Generate a pathway view for a specific frame in UCSF Chimera:**
 ```bash
 water_bridges_nw visualize \
-  --data results.jsonl \
+  --data custom_results.jsonl \
   --format chimera \
   --mode frame \
   --frame 10 \
@@ -90,4 +96,4 @@ water_bridges_nw visualize \
 *   `--format`: Target visualization software (`vmd`, `pymol`, or `chimera`).
 *   `--mode`: Either `density` (overlays pathways across all analyzed frames) or `frame` (extracts a single frame).
 *   `--frame`: Index of the frame to visualize (required if `--mode frame` is used).
-*   `--output`: Name of the script to be saved.
+*   `--output`: Custom filename/prefix for the exported script to prevent overwriting outputs (default: `pathways_viz`).
