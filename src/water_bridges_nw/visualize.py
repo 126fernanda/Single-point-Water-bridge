@@ -171,19 +171,24 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
                         shape_idx += 1
         logger.info(f"Chimera density script written to {output_file}")
 
-def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, output_file=None):
+def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, output_file="pathways_viz"):
     if not os.path.exists(data_file):
         logger.error(f"Data file {data_file} not found.")
         return
 
+    # Append appropriate extension based on format if not provided by user
+    if format == "vmd" and not output_file.endswith(".tcl"):
+        out = f"{output_file}.tcl"
+    elif format in ["pymol", "chimera"] and not output_file.endswith(".py"):
+        out = f"{output_file}.py"
+    else:
+        out = output_file
+
     if format == "vmd":
-        out = output_file or ("vmd_density.tcl" if mode == "density" else "vmd_frame.tcl")
         export_vmd_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx)
     elif format == "pymol":
-        out = output_file or ("pymol_density.py" if mode == "density" else "pymol_frame.py")
         export_pymol_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx)
     elif format == "chimera":
-        out = output_file or ("chimera_density.py" if mode == "density" else "chimera_frame.py")
         export_chimera_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx)
     else:
         logger.error(f"Unknown format: {format}")

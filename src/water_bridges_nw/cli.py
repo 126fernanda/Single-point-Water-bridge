@@ -25,7 +25,8 @@ def main():
     calc_parser.add_argument("--root", required=True, help="MDAnalysis selection string for the root atoms (e.g., 'resname LIG').")
     calc_parser.add_argument("--water", default="resname SOL or resname WAT or resname HOH", help="MDAnalysis selection string for water.")
     calc_parser.add_argument("--stride", type=int, default=1, help="Frame stride for trajectory processing.")
-    calc_parser.add_argument("--max_depth", type=int, default=5, help="Maximum number of consecutive waters in a path.")
+    calc_parser.add_argument("--max_depth", type=int, default=10, help="Maximum number of consecutive waters in a path.")
+    calc_parser.add_argument("--min_depth", type=int, default=1, help="Minimum path length to save in results.")
     calc_parser.add_argument("--prob_threshold", type=float, default=1e-3, help="Minimum cumulative probability threshold to keep exploring.")
     calc_parser.add_argument("--coarse_cutoff", type=float, default=3.5, help="Coarse distance cutoff (Angstroms) for initial graph building.")
     calc_parser.add_argument("--output", default="results.jsonl", help="Output JSON Lines file for storing the raw network data.")
@@ -37,7 +38,7 @@ def main():
     vis_parser.add_argument("--format", choices=["vmd", "pymol", "chimera"], default="vmd", help="Target visualization software.")
     vis_parser.add_argument("--mode", choices=["density", "frame"], default="density", help="Visualization mode: 'density' (all frames) or 'frame' (single frame).")
     vis_parser.add_argument("--frame", type=int, default=None, help="Frame index to visualize (only used if mode='frame').")
-    vis_parser.add_argument("--output", default=None, help="Output script file name (default is auto-generated).")
+    vis_parser.add_argument("--output", default="pathways_viz", help="Output script file name or prefix.")
 
     args = parser.parse_args()
 
@@ -49,6 +50,7 @@ def main():
             water_sel=args.water,
             stride=args.stride,
             max_depth=args.max_depth,
+            min_depth=args.min_depth,
             prob_threshold=args.prob_threshold,
             coarse_cutoff=args.coarse_cutoff,
             output_file=args.output,

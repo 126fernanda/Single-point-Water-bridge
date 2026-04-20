@@ -1,6 +1,7 @@
 import json
 import logging
 import csv
+import sys
 from collections import defaultdict
 import MDAnalysis as mda
 import numpy as np
@@ -10,7 +11,7 @@ from .core import build_graph, compute_edge_probabilities, traverse_network
 logger = logging.getLogger(__name__)
 
 def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resname WAT or resname HOH",
-                 stride=1, max_depth=5, prob_threshold=1e-3, coarse_cutoff=3.5,
+                 stride=1, max_depth=10, min_depth=1, prob_threshold=1e-3, coarse_cutoff=3.5,
                  output_file="results.jsonl", csv_file=None):
     """
     Iterates over the trajectory and aggregates network pathways.
@@ -42,10 +43,15 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
     water_atoms = u.select_atoms(water_sel)
     root_atoms = u.select_atoms(root_sel)
 
+    if len(root_atoms) == 0:
+        logger.error(f"Error: Root selection '{root_sel}' returned no atoms. Check your resname/resid.")
+        sys.exit(1)
+
     # Global stats
     total_length_sum = 0
     total_prob_sum = 0
     total_paths = 0
+    found_large_path = False
 
     out_f = open(output_file, 'w')
 
@@ -89,6 +95,13 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
         frame_paths_data = []
         for path_indices, prob in paths:
             path_len = len(path_indices) - 1
+
+            if path_len < min_depth:
+                continue
+
+            if path_len >= 8:
+                found_large_path = True
+
             total_length_sum += path_len
             total_prob_sum += prob
 
@@ -122,6 +135,13 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
         out_f.write(json.dumps({"type": "frame", "frame_idx": frame_idx, "paths": frame_paths_data}) + '\n')
 
     out_f.close()
+    # Check threshold notification
+    if max_depth >= 8 and not found_large_path:
+        notice_msg = "Notice: No water-bridges larger than 8 layers were detected in this analysis."
+        logger.info(notice_msg)
+        with open(output_file, 'a') as f:
+            f.write(json.dumps({"type": "notice", "message": notice_msg}) + '\n')
+
     if csv_f:
         csv_f.close()
         logger.info(f"CSV saved to {csv_file}")
@@ -135,5 +155,4 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
     logger.info(f"Average cumulative probability: {avg_prob:.4f}")
     logger.info(f"Results saved to {output_file}")
 
-    # We could return a dictionary for backwards compatibility but we rely on files now.
     return None
