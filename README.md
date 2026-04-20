@@ -1,11 +1,14 @@
-# water_bridges-Nw
+# water_bridges-nw
 
-`water_bridges-Nw` is a standalone Python package that implements a hybrid algorithm merging CAVER's tunnel-search logic with continuous water bridge detection. It is designed to explore open-ended, water-mediated hydrogen-bond networks in molecular dynamics trajectories.
+`water_bridges-Nw` is a high-performance Python framework for the discovery and statistical analysis of water-mediated hydrogen-bond networks (water bridges) in molecular dynamics (MD) trajectories. By merging the directional logic of tunnel-search algorithms with a continuous probabilistic model, it identifies functional "water wires" and multi-order water bridge pathways that traditional geometric cut-offs often miss.
 
 ## Features and Utilities
 
-*   **Open-Ended Network Traversal:** Employs a breadth-first search (BFS) algorithm originating from a single user-defined root coordinate. The exploration expands radially into the solvent and organically stops based on path probability thresholds and maximum depth.
-*   **Continuous Switching Probabilities:** Replaces rigid geometric cutoffs (angles/distances) with continuous, fractional probability functions for hydrogen bonds, rewarding highly stable connections. Uses the vectorized `MDAnalysis` C-backend (`distance_array`) to efficiently calculate spatial placements with full Periodic Boundary Condition (PBC) compliance.
+*   **Multi-Order Water Bridge Discovery:** Unlike tools limited to first-order bridges, this package utilizes a shell-based Breadth-First Search (BFS) to identify complex, higher-order water bridges. It originates from a single user-defined root to explore how these bridges organically extend into the bulk solvent.
+*   **Continuous Probabilistic Bridge Scoring:** Replaces rigid binary cut-offs with fractional switching functions. This evaluates the stability of a water bridge based on:
+    *   **Heavy-Atom Geometry:** Tunable $r_{OO}$ distance factors.
+    *   **Angular Alignment:** Rewards linear donor-hydrogen-acceptor arrangements.
+    *   **Chemical Specificity:** Adjusts bridge probability based on atom elements (e.g., Nitrogen vs. Oxygen vs. Sulfur).
 *   **Two-Phase Execution Architecture:**
     *   **Phase 1 (Calculate):** Processes trajectory data frame-by-frame using `MDAnalysis` and `NetworkX` to evaluate potential edges and aggregate statistical pathways. Employs a zero-memory-growth O(1) tracking architecture, streaming outputs safely via `JSON Lines (.jsonl)` and structured `.csv` to prevent RAM exhaustion.
     *   **Phase 2 (Visualize):** Parses the calculated data and seamlessly generates visualization scripts.
