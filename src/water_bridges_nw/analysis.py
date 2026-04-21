@@ -124,6 +124,16 @@ def cluster_pathways(data_file, threshold=3.5, output_file="clustered_pathways.j
     logger.info(f"Clustering complete. Results saved to {output_file}")
 
 
+def sanitize_csv_field(field_value):
+    """
+    Sanitizes a field value for CSV export to prevent formula injection.
+    If the value starts with =, +, -, or @, it prepends a single quote.
+    """
+    field_str = str(field_value)
+    if field_str.startswith(('=', '+', '-', '@')):
+        return f"'{field_str}"
+    return field_str
+
 def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resname WAT or resname HOH",
                  stride=1, max_depth=10, min_depth=1, prob_threshold=1e-3, coarse_cutoff=3.5,
                  output_file="results.jsonl", csv_file=None, cluster=False, cluster_threshold=3.5):
@@ -243,7 +253,12 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
             if csv_writer:
                 root_res = u.atoms[path_indices[0]].resname
                 path_str = "-".join(str(n) for n in path_indices)
-                csv_writer.writerow([frame_idx, root_res, path_str, path_len, prob, avg_oo])
+
+                # Sanitize to prevent CSV formula injection
+                safe_root_res = sanitize_csv_field(root_res)
+                safe_path_str = sanitize_csv_field(path_str)
+
+                csv_writer.writerow([frame_idx, safe_root_res, safe_path_str, path_len, prob, avg_oo])
 
         # Write frame data immediately to release RAM
         out_f.write(json.dumps({"type": "frame", "frame_idx": frame_idx, "paths": frame_paths_data}) + '\n')
