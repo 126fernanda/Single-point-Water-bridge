@@ -2,7 +2,6 @@ import json
 import logging
 import csv
 import sys
-from collections import defaultdict
 import MDAnalysis as mda
 import numpy as np
 
