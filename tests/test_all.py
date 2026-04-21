@@ -2,12 +2,13 @@ import unittest
 import os
 import tempfile
 import networkx as nx
+from unittest.mock import patch
 import MDAnalysis as mda
 import numpy as np
 
 from water_bridges_nw.math_utils import switching_function, calculate_hbond_probability
 from water_bridges_nw.core import build_graph, compute_edge_probabilities, traverse_network
-from water_bridges_nw.visualize import export_vmd_script, export_pymol_script
+from water_bridges_nw.visualize import export_vmd_script, export_pymol_script, run_visualization
 from water_bridges_nw.analysis import sanitize_csv_field
 
 class TestAnalysis(unittest.TestCase):
@@ -94,7 +95,9 @@ class TestCoreFunctions(unittest.TestCase):
         for p, prob in paths:
             if p == [0, 1, 2]:
                 found_longest = True
-                self.assertAlmostEqual(prob, 0.64)
+                # weight = -np.log(0.8) + (-np.log(0.8) * 0.92)
+                # prob = np.exp(-weight) = 0.8 * (0.8 ** 0.92) = 0.6515275355087862
+                self.assertAlmostEqual(prob, 0.6515275355087862)
         self.assertTrue(found_longest)
 
 class TestVisualization(unittest.TestCase):
