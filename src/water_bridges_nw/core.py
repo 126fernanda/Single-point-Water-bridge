@@ -5,6 +5,7 @@ from MDAnalysis.lib.distances import capped_distance, distance_array
 from .math_utils import calculate_hbond_probability
 
 COOPERATIVITY_FACTOR = 0.92
+MAX_PATHS = 500
 
 def _get_element(atom):
     """
@@ -206,26 +207,33 @@ def compute_edge_probabilities(g, u):
 
 def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3):
     """
-    Performs Dijkstra-based search to find the optimal path to each reachable node.
+    Performs bounded multipath search to capture the entropic contribution
+    of the pathway ensemble.
     """
     import heapq
 
-    dist = {}
-    best_path = {}
-
     pq = []
+    visited = set()
+    final_paths = []
 
     for root in root_indices:
         if root in g:
             heapq.heappush(pq, (0.0, root, 0, [root]))
-            dist[root] = 0.0
-            best_path[root] = [root]
 
     while pq:
         curr_weight, u_node, depth, path = heapq.heappop(pq)
 
-        if curr_weight > dist.get(u_node, float('inf')):
+        state = (u_node, frozenset(path))
+        if state in visited:
             continue
+        visited.add(state)
+
+        if len(path) > 1:
+            prob = np.exp(-curr_weight)
+            if prob >= prob_threshold:
+                final_paths.append((path, float(prob)))
+                if len(final_paths) >= MAX_PATHS:
+                    break
 
         if depth >= max_depth:
             continue
@@ -239,17 +247,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3):
             next_prob = np.exp(-next_weight)
 
             if next_prob >= prob_threshold:
-                if next_weight < dist.get(v_node, float('inf')):
-                    dist[v_node] = next_weight
-                    next_path = path + [v_node]
-                    best_path[v_node] = next_path
-                    heapq.heappush(pq, (next_weight, v_node, depth + 1, next_path))
-
-    final_paths = []
-    for node, path in best_path.items():
-        if len(path) > 1:
-            prob = np.exp(-dist[node])
-            if prob >= prob_threshold:
-                final_paths.append((path, float(prob)))
+                next_path = path + [v_node]
+                heapq.heappush(pq, (next_weight, v_node, depth + 1, next_path))
 
     return final_paths
