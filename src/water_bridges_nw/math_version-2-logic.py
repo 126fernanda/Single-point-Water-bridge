@@ -1,3 +1,4 @@
+#HbondWire.f90 Python version
 import MDAnalysis as mda
 from MDAnalysis.analysis.distances import distance_array
 import numpy as np
