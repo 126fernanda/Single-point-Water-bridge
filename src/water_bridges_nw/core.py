@@ -1,7 +1,32 @@
+import re
 import numpy as np
 import networkx as nx
 from MDAnalysis.lib.distances import capped_distance, distance_array
 from .math_utils import calculate_hbond_probability
+
+def _get_element(atom):
+    """
+    Robustly resolves the element of an atom, preventing misclassification.
+    Priority 1: atom.element (MDAnalysis standard).
+    Priority 2: Strip leading digits from atom.name and take the leading alphabetic substring.
+    """
+    valid_elements = {"O", "N", "S", "F", "CL", "BR"}
+    try:
+        if atom.element:
+            e = atom.element.strip().upper()
+            if e in valid_elements:
+                return e
+    except AttributeError:
+        pass
+
+    # Fallback: Strip leading digits and extract the leading alphabetic substring
+    match = re.search(r'^[0-9]*([A-Za-z]+)', atom.name)
+    if match:
+        e = match.group(1).upper()
+        if e in valid_elements:
+            return e
+
+    return "UNKNOWN"
 
 def build_graph(u, water_atoms, root_atoms, max_distance=3.5, max_depth=5):
     """
@@ -100,6 +125,13 @@ def compute_edge_probabilities(g, u):
         a1 = u.atoms[u_node]
         a2 = u.atoms[v_node]
 
+        e1 = _get_element(a1)
+        e2 = _get_element(a2)
+
+        if e1 == "UNKNOWN" or e2 == "UNKNOWN":
+            edges_to_remove.append((u_node, v_node))
+            continue
+
         mod_rOO = data['dist']
 
         hs1 = get_hydrogens(a1)
@@ -119,19 +151,6 @@ def compute_edge_probabilities(g, u):
             # Since a1 and a2 are heavy atoms (O, N, etc.), one acts as donor, one as acceptor.
 
             # Determine appropriate r0_oo based on heavy atom elements
-            # Moving this outside the hydrogen loop avoids redundant attribute lookups
-            try:
-                e1 = a1.element
-            except AttributeError:
-                e1 = a1.name[0]
-            try:
-                e2 = a2.element
-            except AttributeError:
-                e2 = a2.name[0]
-
-            e1 = e1.upper()
-            e2 = e2.upper()
-
             if 'S' in (e1, e2):
                 r0_oo_fixed = 3.3
                 r0_threshold_fixed = 0.8
