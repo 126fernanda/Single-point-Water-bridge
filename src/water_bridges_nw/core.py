@@ -1,7 +1,7 @@
 import numpy as np
 import MDAnalysis as mda
 import networkx as nx
-from MDAnalysis.lib.distances import capped_distance, calc_bonds, distance_array
+from MDAnalysis.lib.distances import capped_distance, distance_array, calc_angles
 from .math_utils import calculate_hbond_probability
 
 def build_graph(u, water_atoms, root_atoms, max_distance=3.5, max_depth=5):
@@ -119,8 +119,6 @@ def compute_edge_probabilities(g, u):
             # - Acceptor-Hydrogen distance <= 3.0 A
             # - Donor-Hydrogen-Acceptor Angle >= 120 degrees
             # Since a1 and a2 are heavy atoms (O, N, etc.), one acts as donor, one as acceptor.
-
-            from MDAnalysis.lib.distances import calc_angles
 
             best_prob = 0.0
 
