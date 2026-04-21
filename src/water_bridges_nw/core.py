@@ -4,6 +4,8 @@ import networkx as nx
 from MDAnalysis.lib.distances import capped_distance, distance_array
 from .math_utils import calculate_hbond_probability
 
+COOPERATIVITY_FACTOR = 0.92
+
 def _get_element(atom):
     """
     Robustly resolves the element of an atom, preventing misclassification.
@@ -233,7 +235,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3):
                 continue
 
             edge_weight = g[u_node][v_node]['weight']
-            next_weight = curr_weight + edge_weight
+            next_weight = curr_weight + edge_weight * (COOPERATIVITY_FACTOR ** depth)
             next_prob = np.exp(-next_weight)
 
             if next_prob >= prob_threshold:

@@ -95,7 +95,9 @@ class TestCoreFunctions(unittest.TestCase):
         for p, prob in paths:
             if p == [0, 1, 2]:
                 found_longest = True
-                self.assertAlmostEqual(prob, 0.64)
+                # weight = -np.log(0.8) + (-np.log(0.8) * 0.92)
+                # prob = np.exp(-weight) = 0.8 * (0.8 ** 0.92) = 0.6515275355087862
+                self.assertAlmostEqual(prob, 0.6515275355087862)
         self.assertTrue(found_longest)
 
 class TestVisualization(unittest.TestCase):
