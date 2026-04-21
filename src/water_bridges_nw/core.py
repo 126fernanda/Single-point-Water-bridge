@@ -1,7 +1,32 @@
+import re
 import numpy as np
 import networkx as nx
 from MDAnalysis.lib.distances import capped_distance, distance_array
 from .math_utils import calculate_hbond_probability
+
+def _get_element(atom):
+    """
+    Robustly resolves the element of an atom, preventing misclassification.
+    Priority 1: atom.element (MDAnalysis standard).
+    Priority 2: Strip leading digits from atom.name and take the leading alphabetic substring.
+    """
+    valid_elements = {"O", "N", "S", "F", "CL", "BR"}
+    try:
+        if atom.element:
+            e = atom.element.strip().upper()
+            if e in valid_elements:
+                return e
+    except AttributeError:
+        pass
+
+    # Fallback: Strip leading digits and extract the leading alphabetic substring
+    match = re.search(r'^[0-9]*([A-Za-z]+)', atom.name)
+    if match:
+        e = match.group(1).upper()
+        if e in valid_elements:
+            return e
+
+    return "UNKNOWN"
 
 def build_graph(u, water_atoms, root_atoms, max_distance=3.5, max_depth=5):
     """
@@ -100,6 +125,13 @@ def compute_edge_probabilities(g, u):
         a1 = u.atoms[u_node]
         a2 = u.atoms[v_node]
 
+        e1 = _get_element(a1)
+        e2 = _get_element(a2)
+
+        if e1 == "UNKNOWN" or e2 == "UNKNOWN":
+            edges_to_remove.append((u_node, v_node))
+            continue
+
         mod_rOO = data['dist']
 
         hs1 = get_hydrogens(a1)
@@ -116,25 +148,9 @@ def compute_edge_probabilities(g, u):
             # Apply strict geometric filters:
             # - Distance cutoff: At least one of the OH distances (donor-hydrogen) must be reasonably short (e.g., covalent bond ~ 1.0A).
             # - Acceptor-Hydrogen distance <= 3.0 A
-            # - Donor-Hydrogen-Acceptor Angle >= 120 degrees
             # Since a1 and a2 are heavy atoms (O, N, etc.), one acts as donor, one as acceptor.
 
-            from MDAnalysis.lib.distances import calc_angles
-
             # Determine appropriate r0_oo based on heavy atom elements
-            # Moving this outside the hydrogen loop avoids redundant attribute lookups
-            try:
-                e1 = a1.element
-            except AttributeError:
-                e1 = a1.name[0]
-            try:
-                e2 = a2.element
-            except AttributeError:
-                e2 = a2.name[0]
-
-            e1 = e1.upper()
-            e2 = e2.upper()
-
             if 'S' in (e1, e2):
                 r0_oo_fixed = 3.3
                 r0_threshold_fixed = 0.8
@@ -145,8 +161,8 @@ def compute_edge_probabilities(g, u):
                 r0_oo_fixed = 2.9
                 r0_threshold_fixed = 0.55
             else: # O-O and defaults
-                r0_oo_fixed = 2.7
-                r0_threshold_fixed = 0.5
+                r0_oo_fixed = 2.80
+                r0_threshold_fixed = 0.45
 
             best_prob = 0.0
 
@@ -159,39 +175,20 @@ def compute_edge_probabilities(g, u):
                 if not (is_a1_donor or is_a2_donor):
                     continue
 
-                donor_pos = a1.position if is_a1_donor else a2.position
-                acceptor_pos = a2.position if is_a1_donor else a1.position
-
                 # Acceptor-Hydrogen distance
                 dist_HA = d2_array[idx] if is_a1_donor else d1_array[idx]
                 if dist_HA > 3.0:
                     continue
 
-                # Angle: Donor - Hydrogen - Acceptor
-                # calc_angles takes arrays of coords: (pos1, pos2, pos3) for angle 1-2-3
-                # We need angle donor - hydrogen - acceptor
-                # Note: MDAnalysis calc_angles expects shapes (N, 3)
-                angle = calc_angles(
-                    np.array([donor_pos]),
-                    np.array([h_pos]),
-                    np.array([acceptor_pos]),
-                    box=u.dimensions
-                )[0]
-
-                # Convert radians to degrees (calc_angles returns radians)
-                angle_deg = np.degrees(angle)
-
-                if angle_deg >= 120.0:
-                    # Valid H-bond geometry. Calculate continuous probability.
-                    mod_rOiH = d1_array[idx]
-                    mod_rOjH = d2_array[idx]
-                    p = calculate_hbond_probability(
-                        mod_rOO, mod_rOiH, mod_rOjH,
-                        r0_oo=r0_oo_fixed,
-                        r0_threshold=r0_threshold_fixed
-                    )
-                    if p > best_prob:
-                        best_prob = p
+                # Valid H-bond geometry based on distance. Calculate continuous probability.
+                mod_rOiH = d1_array[idx]
+                mod_rOjH = d2_array[idx]
+                p = calculate_hbond_probability(
+                    mod_rOO, mod_rOiH, mod_rOjH,
+                    r0_oo=r0_oo_fixed,
+                    r0_threshold=r0_threshold_fixed
+                )
+                best_prob = max(best_prob, p)
 
             prob = best_prob
 
