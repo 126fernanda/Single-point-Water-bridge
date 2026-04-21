@@ -1,11 +1,16 @@
 import re
+import logging
 import numpy as np
 import networkx as nx
 from MDAnalysis.lib.distances import capped_distance, distance_array
 from .math_utils import calculate_hbond_probability
 
+logger = logging.getLogger(__name__)
+
 COOPERATIVITY_FACTOR = 0.92
 MAX_PATHS = 500
+
+_warned_united_atom = set()
 
 def _get_element(atom):
     """
@@ -105,6 +110,7 @@ def compute_edge_probabilities(g, u):
     """
     edges_to_remove = []
     h_cache = {}
+    united_atom_skipped_edges = 0
 
     def get_hydrogens(atom):
         if atom.index in h_cache:
@@ -120,6 +126,12 @@ def compute_edge_probabilities(g, u):
         dists = distance_array(np.array([atom.position]), hs_positions, box=u.dimensions)[0]
 
         bonded_hs = [candidate_hs[i] for i, d in enumerate(dists) if d <= 1.2]
+
+        if not bonded_hs:
+            elem = _get_element(atom)
+            if elem in {"O", "N", "S"} and atom.index not in _warned_united_atom:
+                logger.warning(f"Heavy atom {elem} (index {atom.index}) has no bonded hydrogens. This may indicate a united-atom force field. Edge probability calculations might be impaired.")
+                _warned_united_atom.add(atom.index)
 
         h_cache[atom.index] = bonded_hs
         return bonded_hs
@@ -142,7 +154,11 @@ def compute_edge_probabilities(g, u):
         all_hs = hs1 + hs2
 
         if not all_hs:
-            prob = 0.0
+            if e1 in {"O", "N", "S"} or e2 in {"O", "N", "S"}:
+                g[u_node][v_node]['united_atom_skip'] = True
+                united_atom_skipped_edges += 1
+            edges_to_remove.append((u_node, v_node))
+            continue
         else:
             p_hs = np.array([h.position for h in all_hs])
             d1_array = distance_array(np.array([a1.position]), p_hs, box=u.dimensions)[0]
@@ -203,6 +219,14 @@ def compute_edge_probabilities(g, u):
             g[u_node][v_node]['weight'] = score
 
     g.remove_edges_from(edges_to_remove)
+
+    if united_atom_skipped_edges > 0:
+        logger.warning(
+            f"Skipped {united_atom_skipped_edges} edge(s) because neither connecting atom had explicit hydrogens. "
+            "If this count is high, you may be using a united-atom force field without explicit hydrogens. "
+            "Please provide an explicit-hydrogen topology for accurate water bridge detection."
+        )
+
     return g
 
 def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3):
