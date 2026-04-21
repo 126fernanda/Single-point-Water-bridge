@@ -1,7 +1,6 @@
 import numpy as np
-import MDAnalysis as mda
 import networkx as nx
-from MDAnalysis.lib.distances import capped_distance, calc_bonds, distance_array
+from MDAnalysis.lib.distances import capped_distance, distance_array
 from .math_utils import calculate_hbond_probability
 
 def build_graph(u, water_atoms, root_atoms, max_distance=3.5, max_depth=5):
