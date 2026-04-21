@@ -171,17 +171,21 @@ def compute_edge_probabilities(g, u):
 
                     if 'S' in (e1, e2):
                         r0_oo = 3.3
+                        r0_threshold = 0.8
                     elif (e1, e2) in (('N', 'N'),):
                         r0_oo = 3.0
+                        r0_threshold = 0.6
                     elif (e1, e2) in (('N', 'O'), ('O', 'N')):
                         r0_oo = 2.9
+                        r0_threshold = 0.55
                     else: # O-O and defaults
                         r0_oo = 2.7
+                        r0_threshold = 0.5
 
                     # Valid H-bond geometry. Calculate continuous probability.
                     mod_rOiH = d1_array[idx]
                     mod_rOjH = d2_array[idx]
-                    p = calculate_hbond_probability(mod_rOO, mod_rOiH, mod_rOjH, r0_oo=r0_oo)
+                    p = calculate_hbond_probability(mod_rOO, mod_rOiH, mod_rOjH, r0_oo=r0_oo, r0_threshold=r0_threshold)
                     if p > best_prob:
                         best_prob = p
 

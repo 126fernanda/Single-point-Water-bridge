@@ -15,6 +15,7 @@
     *   **Phase 1 (Calculate):** Processes trajectory data frame-by-frame using `MDAnalysis` and `NetworkX` to evaluate potential edges and aggregate statistical pathways. Employs a zero-memory-growth O(1) tracking architecture, streaming outputs safely via `JSON Lines (.jsonl)` and structured `.csv` to prevent RAM exhaustion.
     *   **Phase 2 (Visualize):** Parses the calculated data and seamlessly generates visualization scripts.
 *   **High-Performance Visualizations:** Decoupled visualization logic exports powerful scripts targeting PyMOL (CGO cylinders), VMD (Dynamic Tcl selection indexing), and UCSF Chimera (`.py`/`.cmd`). Explicitly maps the true topological `.id` to guarantee 100% accurate visual rendering of pathways even across structurally gapped or complex topologies.
+*   **Temporal Clustering:** Groups structurally similar pathways discovered across varying simulation frames into robust "collective pathways" using hierarchical average-link clustering and directed Hausdorff distance metrics, quantifying true thermodynamic occupancy over time.
 
 ## Installation
 
@@ -37,7 +38,7 @@ pip install -e .
 The package is run via a unified Command-Line Interface (CLI): `water_bridges_nw`.
 
 ### 1. Calculation Phase
-Analyze your MD trajectory to discover water-mediated networks. By default, the output is saved to `results.json`.
+Analyze your MD trajectory to discover water-mediated networks. By default, the output is saved to `results.jsonl`.
 
 ```bash
 water_bridges_nw calculate \
@@ -48,8 +49,11 @@ water_bridges_nw calculate \
   --max_depth 10 \
   --min_depth 3 \
   --prob_threshold 0.001 \
+  --coarse_cutoff 3.5 \
   --output custom_results.jsonl \
-  --csv custom_summary.csv
+  --csv custom_summary.csv \
+  --cluster \
+  --cluster_threshold 3.5
 ```
 
 *Options:*
@@ -60,9 +64,12 @@ water_bridges_nw calculate \
 *   `--stride`: Frame stride to process. *(Note: A warning is issued if the evaluated frames exceed 1000)*
 *   `--max_depth`: Maximum chain length of sequential waters (default: `10`).
 *   `--min_depth`: Minimum chain length filter. Shorter paths will be discarded (default: `1`).
-*   `--prob_threshold`: Cumulative probabilistic threshold; paths falling below this probability are pruned.
+*   `--prob_threshold`: Cumulative probabilistic threshold; paths falling below this probability are pruned (default: `0.001`).
+*   `--coarse_cutoff`: Coarse distance cutoff (Angstroms) for initial graph building (default: `3.5`).
 *   `--output`: Custom filename for the detailed `JSON Lines` output (default: `results.jsonl`).
 *   `--csv`: Optional custom filename to generate a structured, human-readable summary of the detected paths.
+*   `--cluster`: Enable temporal clustering of pathways post-analysis. Generates a `clustered_pathways.json` file detailing collective pathways, average probabilities, and temporal occupancies.
+*   `--cluster_threshold`: Spatial distance threshold for pathway clustering in Angstroms (default: `3.5`).
 
 ### 2. Visualization Phase
 Generate rendering scripts from your calculation output.
