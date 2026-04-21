@@ -142,8 +142,8 @@ def compute_edge_probabilities(g, u):
                 r0_oo_fixed = 2.9
                 r0_threshold_fixed = 0.55
             else: # O-O and defaults
-                r0_oo_fixed = 2.7
-                r0_threshold_fixed = 0.5
+                r0_oo_fixed = 2.80
+                r0_threshold_fixed = 0.45
 
             best_prob = 0.0
 
