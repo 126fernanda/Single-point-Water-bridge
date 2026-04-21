@@ -176,6 +176,8 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
     total_paths = 0
     found_large_path = False
 
+    path_frequency = {}
+
     out_f = open(output_file, 'w')
 
     csv_f = None
@@ -228,6 +230,9 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
             total_length_sum += path_len
             total_prob_sum += prob
 
+            path_tuple = tuple(int(n) for n in path_indices)
+            path_frequency.setdefault(path_tuple, set()).add(frame_idx)
+
             coords = []
             distances = []
             for i, node_idx in enumerate(path_indices):
@@ -261,6 +266,28 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
 
         # Write frame data immediately to release RAM
         out_f.write(json.dumps({"type": "frame", "frame_idx": frame_idx, "paths": frame_paths_data}) + '\n')
+
+    # Calculate path statistics
+    top_paths = []
+    for p_tuple, frames_set in path_frequency.items():
+        frame_count = len(frames_set)
+        occupancy = float(frame_count) / total_processed if total_processed > 0 else 0.0
+        top_paths.append({
+            "nodes": list(p_tuple),
+            "frame_count": frame_count,
+            "occupancy": occupancy
+        })
+
+    # Sort descending by frame count and select top 20
+    top_paths.sort(key=lambda x: x["frame_count"], reverse=True)
+    top_paths = top_paths[:20]
+
+    path_stats_obj = {
+        "type": "path_statistics",
+        "total_frames_analyzed": total_processed,
+        "top_paths": top_paths
+    }
+    out_f.write(json.dumps(path_stats_obj) + '\n')
 
     out_f.close()
     # Check threshold notification
