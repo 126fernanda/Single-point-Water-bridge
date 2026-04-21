@@ -1,5 +1,4 @@
 import numpy as np
-import MDAnalysis as mda
 import networkx as nx
 from MDAnalysis.lib.distances import capped_distance, calc_bonds, distance_array
 from .math_utils import calculate_hbond_probability
