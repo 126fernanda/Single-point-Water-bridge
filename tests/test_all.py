@@ -8,6 +8,26 @@ import numpy as np
 from water_bridges_nw.math_utils import switching_function, calculate_hbond_probability
 from water_bridges_nw.core import build_graph, compute_edge_probabilities, traverse_network
 from water_bridges_nw.visualize import export_vmd_script, export_pymol_script
+from water_bridges_nw.analysis import sanitize_csv_field
+
+class TestAnalysis(unittest.TestCase):
+    def test_sanitize_csv_field(self):
+        # Normal strings should remain unchanged
+        self.assertEqual(sanitize_csv_field("NormalRes"), "NormalRes")
+        self.assertEqual(sanitize_csv_field("1-2-3"), "1-2-3")
+        self.assertEqual(sanitize_csv_field(123), "123")
+
+        # Dangerous characters at start should have a single quote prepended
+        self.assertEqual(sanitize_csv_field("=cmd|' /C calc'!A0"), "'=cmd|' /C calc'!A0")
+        self.assertEqual(sanitize_csv_field("+1+2"), "'+1+2")
+        self.assertEqual(sanitize_csv_field("-1-2-3"), "'-1-2-3")
+        self.assertEqual(sanitize_csv_field("@SUM(A1:A10)"), "'@SUM(A1:A10)")
+
+        # Dangerous characters not at start should remain unchanged
+        self.assertEqual(sanitize_csv_field("Res="), "Res=")
+        self.assertEqual(sanitize_csv_field("A+B"), "A+B")
+        self.assertEqual(sanitize_csv_field("1-2-3-"), "1-2-3-")
+        self.assertEqual(sanitize_csv_field("foo@bar"), "foo@bar")
 
 class TestMathUtils(unittest.TestCase):
     def test_switching_function(self):
