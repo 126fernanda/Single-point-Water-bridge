@@ -7,7 +7,8 @@ import numpy as np
 
 from water_bridges_nw.math_utils import switching_function, calculate_hbond_probability
 from water_bridges_nw.core import build_graph, compute_edge_probabilities, traverse_network
-from water_bridges_nw.visualize import export_vmd_script, export_pymol_script
+from unittest.mock import patch
+from water_bridges_nw.visualize import export_vmd_script, export_pymol_script, run_visualization
 
 class TestMathUtils(unittest.TestCase):
     def test_switching_function(self):
@@ -97,6 +98,51 @@ class TestVisualization(unittest.TestCase):
 
         os.remove(temp_name)
         os.remove(json_name)
+
+    @patch('water_bridges_nw.visualize.logger.error')
+    def test_run_visualization_file_not_found(self, mock_logger_error):
+        run_visualization("non_existent_file.jsonl", format="vmd")
+        mock_logger_error.assert_called_once_with("Data file non_existent_file.jsonl not found.")
+
+    @patch('water_bridges_nw.visualize.export_vmd_script')
+    def test_run_visualization_vmd_routing(self, mock_export):
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            pass
+        try:
+            run_visualization(temp_file.name, format="vmd", mode="frame", frame_idx=0, output_file="test_out")
+            mock_export.assert_called_once_with(temp_file.name, output_file="test_out.tcl", mode="frame", frame_idx=0)
+        finally:
+            os.remove(temp_file.name)
+
+    @patch('water_bridges_nw.visualize.export_pymol_script')
+    def test_run_visualization_pymol_routing(self, mock_export):
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            pass
+        try:
+            run_visualization(temp_file.name, format="pymol", mode="density", output_file="test_out")
+            mock_export.assert_called_once_with(temp_file.name, output_file="test_out.py", mode="density", frame_idx=None)
+        finally:
+            os.remove(temp_file.name)
+
+    @patch('water_bridges_nw.visualize.export_chimera_script')
+    def test_run_visualization_chimera_routing(self, mock_export):
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            pass
+        try:
+            run_visualization(temp_file.name, format="chimera", mode="frame", frame_idx=10, output_file="test_out.py")
+            mock_export.assert_called_once_with(temp_file.name, output_file="test_out.py", mode="frame", frame_idx=10)
+        finally:
+            os.remove(temp_file.name)
+
+    @patch('water_bridges_nw.visualize.logger.error')
+    def test_run_visualization_unknown_format(self, mock_logger_error):
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            pass
+        try:
+            run_visualization(temp_file.name, format="unknown", mode="density", output_file="test_out")
+            mock_logger_error.assert_called_once_with("Unknown format: unknown")
+        finally:
+            os.remove(temp_file.name)
 
 if __name__ == '__main__':
     unittest.main()
