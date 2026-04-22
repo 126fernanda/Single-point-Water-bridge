@@ -24,10 +24,9 @@ def calculate_hbond_probability(mod_rOO, mod_rOiH, mod_rOjH, r0_oo=2.80, r0_thre
     oo_dist_factor = mod_rOO - r0_oo
     p_dist = switching_function(oo_dist_factor, threshold=r0_threshold)
 
-    # Symmetric Gaussian well to penalize steric clashes
-    if mod_rOO < 2.80:
-        sigma = 0.15
-        p_steric = np.exp(-((mod_rOO - 2.80)**2) / (2 * sigma**2))
+    # Asymmetric 12th-power repulsive potential for steric clashes
+    if mod_rOO < 2.40:
+        p_steric = (mod_rOO / 2.40)**12
     else:
         p_steric = 1.0
 

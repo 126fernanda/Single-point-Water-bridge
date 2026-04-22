@@ -7,6 +7,12 @@ from .math_utils import calculate_hbond_probability, switching_function
 
 logger = logging.getLogger(__name__)
 
+_NAME_TO_ELEMENT = {
+    'OW': 'O', 'O1': 'O', 'O2': 'O', 'OD1': 'O', 'OD2': 'O', 'OE1': 'O', 'OE2': 'O', 'OG': 'O', 'OG1': 'O', 'OH': 'O',
+    'NZ': 'N', 'ND1': 'N', 'ND2': 'N', 'NE': 'N', 'NE1': 'N', 'NE2': 'N', 'NH1': 'N', 'NH2': 'N',
+    'SG': 'S', 'SD': 'S'
+}
+
 _warned_united_atom = set()
 
 def _is_hydrogen(a):
@@ -57,7 +63,7 @@ def _get_element(atom):
 
     return "UNKNOWN"
 
-def build_graph(u, water_atoms, root_atoms, max_distance=3.5, max_depth=5):
+def build_graph(u, water_atoms, root_atoms, max_distance=4.5, max_depth=5):
     """
     Builds a NetworkX graph representing potential hydrogen bonds
     using a shell-based iterative expansion to avoid global N^2 distance matrices.
@@ -160,13 +166,13 @@ def compute_edge_probabilities(g, u):
             h_cache[atom.index] = []
             return []
 
-        # Geometric center of neighbors
+        # Hybridization-aware United-Atom geometry projection
         neighbor_pos = np.array([neighbor.position for neighbor in bonded_heavy_atoms])
-        center = np.mean(neighbor_pos, axis=0)
 
-        # Vector from center to atom
-        vec = atom.position - center
-        norm = np.linalg.norm(vec)
+        if len(bonded_heavy_atoms) == 1:
+            # sp2 approximation (e.g., carbonyl oxygen)
+            v1 = atom.position - neighbor_pos[0]
+            v1 /= np.linalg.norm(v1)
 
         if norm < 1e-6: # To avoid division by zero if positions exactly overlap
             h_cache[atom.index] = []
@@ -174,9 +180,45 @@ def compute_edge_probabilities(g, u):
         else:
             # Scale to 1.0 A
             virtual_h = atom.position + (vec / norm) * 1.0
+            # Generate an arbitrary orthogonal vector
+            arb = np.array([1.0, 0.0, 0.0]) if abs(v1[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+            perp = np.cross(v1, arb)
+            perp /= np.linalg.norm(perp)
 
-        h_cache[atom.index] = [virtual_h]
-        return [virtual_h]
+            # Create two lone pair vectors at 120 degrees from the incoming bond
+            cos_120, sin_120 = -0.5, 0.866
+            lp1 = atom.position + (v1 * cos_120 + perp * sin_120) * 1.0
+            lp2 = atom.position + (v1 * cos_120 - perp * sin_120) * 1.0
+
+            h_cache[atom.index] = [lp1, lp2]
+            return [lp1, lp2]
+
+        elif len(bonded_heavy_atoms) == 2:
+            # sp3 approximation (e.g., ether oxygen, thioether sulfur)
+            v1 = neighbor_pos[0] - atom.position
+            v2 = neighbor_pos[1] - atom.position
+            v1 /= np.linalg.norm(v1)
+            v2 /= np.linalg.norm(v2)
+
+            # Normal to the plane defined by Atom and its 2 neighbors
+            n = np.cross(v1, v2)
+            n /= np.linalg.norm(n)
+
+            # Vector bisecting the angle
+            bisector = v1 + v2
+            bisector /= np.linalg.norm(bisector)
+
+            # Project lone pairs outwards (tetrahedral geometry)
+            cos_tilt, sin_tilt = -0.577, 0.816 # approximate projection relative to bisector
+            lp1 = atom.position + (-bisector * cos_tilt + n * sin_tilt) * 1.0
+            lp2 = atom.position + (-bisector * cos_tilt - n * sin_tilt) * 1.0
+
+            h_cache[atom.index] = [lp1, lp2]
+            return [lp1, lp2]
+
+        else:
+            h_cache[atom.index] = []
+            return []
 
     for u_node, v_node, data in g.edges(data=True):
         a1 = u.atoms[u_node]
@@ -212,6 +254,7 @@ def compute_edge_probabilities(g, u):
         if not hs1 or not hs2:
             # United-atom fallback: either side is missing hydrogens, ignore angle
             prob = calculate_hbond_probability(
+            best_prob = calculate_hbond_probability(
                 mod_rOO, None, None,
                 r0_oo=r0_oo_fixed,
                 r0_threshold=r0_threshold_fixed,
@@ -239,13 +282,11 @@ def compute_edge_probabilities(g, u):
                 p_i = p_base * p_ha * p_covalent
                 best_prob = 1.0 - (1.0 - best_prob) * (1.0 - p_i)
 
-            prob = best_prob
-
-        if prob <= 0:
+        if best_prob <= 0:
             edges_to_remove.append((u_node, v_node))
         else:
-            score = -np.log(prob) if prob > 0 else float('inf')
-            g[u_node][v_node]['prob'] = prob
+            score = -np.log(best_prob) if best_prob > 0 else float('inf')
+            g[u_node][v_node]['prob'] = best_prob
             g[u_node][v_node]['weight'] = score
 
     g.remove_edges_from(edges_to_remove)
@@ -263,7 +304,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
     pq = []
     visited = set()
 
-    # Store group data: (endpoint, length) -> list of (weight, path)
+    # Store group data: endpoint -> list of (weight, path)
     endpoint_groups = defaultdict(list)
 
     for root in root_indices:
@@ -282,6 +323,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
             prob = np.exp(-curr_weight)
             if prob >= prob_threshold:
                 endpoint_groups[(u_node, len(path))].append((curr_weight, path))
+                endpoint_groups[u_node].append((curr_weight, path))
 
         if depth >= max_depth:
             continue
@@ -300,7 +342,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
 
     # Compile partition sums and representative paths
     final_results = []
-    for (endpoint, path_length), paths_data in endpoint_groups.items():
+    for endpoint, paths_data in endpoint_groups.items():
         # Calculate Partition Sum: Z = sum(exp(-W_i))
         z_total = sum(np.exp(-w) for w, p in paths_data)
 
