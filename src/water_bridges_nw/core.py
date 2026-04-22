@@ -12,6 +12,24 @@ MAX_PATHS = 500
 
 _warned_united_atom = set()
 
+def _is_hydrogen(a):
+    """
+    Tiered fallback to correctly identify if an atom is hydrogen.
+    1. Element (most reliable)
+    2. Mass (force-field agnostic)
+    3. Name/Type (last resort)
+    """
+    if getattr(a, 'element', '') and a.element.strip().upper() == 'H':
+        return True
+
+    try:
+        if 0.5 < a.mass < 2.5:
+            return True
+    except Exception:
+        pass
+
+    return bool(re.search(r'(?i)\bh', a.name)) or getattr(a, 'type', '') == 'H'
+
 def _get_element(atom):
     """
     Robustly resolves the element of an atom, preventing misclassification.
@@ -116,7 +134,7 @@ def compute_edge_probabilities(g, u):
         if atom.index in h_cache:
             return h_cache[atom.index]
 
-        candidate_hs = [a for a in atom.residue.atoms if a.name.startswith('H') or a.type == 'H']
+        candidate_hs = [a for a in atom.residue.atoms if _is_hydrogen(a)]
         if not candidate_hs:
             h_cache[atom.index] = []
             return []
