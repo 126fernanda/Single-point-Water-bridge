@@ -28,6 +28,7 @@ def main():
     calc_parser.add_argument("--max_depth", type=int, default=10, help="Maximum number of consecutive waters in a path.")
     calc_parser.add_argument("--min_depth", type=int, default=1, help="Minimum path length to save in results.")
     calc_parser.add_argument("--prob_threshold", type=float, default=1e-3, help="Minimum cumulative probability threshold to keep exploring.")
+    calc_parser.add_argument("--cooperativity", type=float, default=0.92, help="Depth-dependent cooperativity factor for hydrogen bonds.")
     calc_parser.add_argument("--coarse_cutoff", type=float, default=3.5, help="Coarse distance cutoff (Angstroms) for initial graph building.")
     calc_parser.add_argument("--output", default="results.jsonl", help="Output JSON Lines file for storing the raw network data.")
     calc_parser.add_argument("--csv", default=None, help="Optional output CSV file for storing human-readable summary data.")
@@ -54,6 +55,7 @@ def main():
             max_depth=args.max_depth,
             min_depth=args.min_depth,
             prob_threshold=args.prob_threshold,
+            cooperativity=args.cooperativity,
             coarse_cutoff=args.coarse_cutoff,
             output_file=args.output,
             csv_file=args.csv,

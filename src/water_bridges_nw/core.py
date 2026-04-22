@@ -7,9 +7,6 @@ from .math_utils import calculate_hbond_probability, switching_function
 
 logger = logging.getLogger(__name__)
 
-COOPERATIVITY_FACTOR = 0.92
-MAX_PATHS = 500
-
 _warned_united_atom = set()
 
 def _is_hydrogen(a):
@@ -244,7 +241,7 @@ def compute_edge_probabilities(g, u):
 
     return g
 
-def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3):
+def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperativity=0.92):
     """
     Performs bounded multipath search to capture the entropic contribution
     of the pathway ensemble.
@@ -271,8 +268,6 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3):
             prob = np.exp(-curr_weight)
             if prob >= prob_threshold:
                 final_paths.append((path, float(prob)))
-                if len(final_paths) >= MAX_PATHS:
-                    break
 
         if depth >= max_depth:
             continue
@@ -282,7 +277,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3):
                 continue
 
             edge_weight = g[u_node][v_node]['weight']
-            next_weight = curr_weight + edge_weight * (COOPERATIVITY_FACTOR ** depth)
+            next_weight = curr_weight + edge_weight * (cooperativity ** depth)
             next_prob = np.exp(-next_weight)
 
             if next_prob >= prob_threshold:
