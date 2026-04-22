@@ -3,20 +3,36 @@ import logging
 import numpy as np
 import networkx as nx
 from MDAnalysis.lib.distances import capped_distance, distance_array
-from .math_utils import calculate_hbond_probability
+from .math_utils import calculate_hbond_probability, switching_function
+import MDAnalysis.topology.guessers
 
 logger = logging.getLogger(__name__)
 
-COOPERATIVITY_FACTOR = 0.92
-MAX_PATHS = 500
-
 _warned_united_atom = set()
+
+def _is_hydrogen(a):
+    """
+    Tiered fallback to correctly identify if an atom is hydrogen.
+    1. Element (most reliable)
+    2. Mass (force-field agnostic)
+    3. Name/Type (last resort)
+    """
+    if getattr(a, 'element', '') and a.element.strip().upper() == 'H':
+        return True
+
+    try:
+        if 0.5 < a.mass < 2.5:
+            return True
+    except Exception:
+        pass
+
+    return bool(re.search(r'(?i)\bh', a.name)) or getattr(a, 'type', '') == 'H'
 
 def _get_element(atom):
     """
     Robustly resolves the element of an atom, preventing misclassification.
     Priority 1: atom.element (MDAnalysis standard).
-    Priority 2: Strip leading digits from atom.name and take the leading alphabetic substring.
+    Priority 2: MDAnalysis.topology.guessers.guess_types fallback.
     """
     valid_elements = {"O", "N", "S", "F", "CL", "BR"}
     try:
@@ -27,10 +43,10 @@ def _get_element(atom):
     except AttributeError:
         pass
 
-    # Fallback: Strip leading digits and extract the leading alphabetic substring
-    match = re.search(r'^[0-9]*([A-Za-z]+)', atom.name)
-    if match:
-        e = match.group(1).upper()
+    # Fallback: MDAnalysis type guesser
+    guessed_type = MDAnalysis.topology.guessers.guess_types([atom.name])[0]
+    if guessed_type:
+        e = guessed_type.strip().upper()
         if e in valid_elements:
             return e
 
@@ -116,25 +132,43 @@ def compute_edge_probabilities(g, u):
         if atom.index in h_cache:
             return h_cache[atom.index]
 
-        candidate_hs = [a for a in atom.residue.atoms if a.name.startswith('H') or a.type == 'H']
-        if not candidate_hs:
+        candidate_hs = [a for a in atom.residue.atoms if _is_hydrogen(a)]
+
+        if candidate_hs:
+            hs_positions = [h.position for h in candidate_hs]
+            h_cache[atom.index] = hs_positions
+            return hs_positions
+
+        # No explicit hydrogens found - United-Atom geometry projection
+        try:
+            bonded_heavy_atoms = atom.bonded_atoms
+        except MDAnalysis.exceptions.NoDataError:
+            bonded_heavy_atoms = []
+
+        if not bonded_heavy_atoms:
+            elem = _get_element(atom)
+            if elem in {"O", "N", "S"} and atom.index not in _warned_united_atom:
+                logger.warning(f"Heavy atom {elem} (index {atom.index}) has no bonded hydrogens and no neighbors. Virtual projection failed.")
+                _warned_united_atom.add(atom.index)
             h_cache[atom.index] = []
             return []
 
-        hs_positions = np.array([h.position for h in candidate_hs])
-        # Use distance_array for 1-to-many distance calculation
-        dists = distance_array(np.array([atom.position]), hs_positions, box=u.dimensions)[0]
+        # Geometric center of neighbors
+        neighbor_pos = np.array([neighbor.position for neighbor in bonded_heavy_atoms])
+        center = np.mean(neighbor_pos, axis=0)
 
-        bonded_hs = [candidate_hs[i] for i, d in enumerate(dists) if d <= 1.2]
+        # Vector from center to atom
+        vec = atom.position - center
+        norm = np.linalg.norm(vec)
 
-        if not bonded_hs:
-            elem = _get_element(atom)
-            if elem in {"O", "N", "S"} and atom.index not in _warned_united_atom:
-                logger.warning(f"Heavy atom {elem} (index {atom.index}) has no bonded hydrogens. This may indicate a united-atom force field. Edge probability calculations might be impaired.")
-                _warned_united_atom.add(atom.index)
+        if norm < 1e-6: # To avoid division by zero if positions exactly overlap
+            virtual_h = atom.position + np.array([1.0, 0.0, 0.0])
+        else:
+            # Scale to 1.0 A
+            virtual_h = atom.position + (vec / norm) * 1.0
 
-        h_cache[atom.index] = bonded_hs
-        return bonded_hs
+        h_cache[atom.index] = [virtual_h]
+        return [virtual_h]
 
     for u_node, v_node, data in g.edges(data=True):
         a1 = u.atoms[u_node]
@@ -160,14 +194,9 @@ def compute_edge_probabilities(g, u):
             edges_to_remove.append((u_node, v_node))
             continue
         else:
-            p_hs = np.array([h.position for h in all_hs])
+            p_hs = np.array(all_hs)
             d1_array = distance_array(np.array([a1.position]), p_hs, box=u.dimensions)[0]
             d2_array = distance_array(np.array([a2.position]), p_hs, box=u.dimensions)[0]
-
-            # Apply strict geometric filters:
-            # - Distance cutoff: At least one of the OH distances (donor-hydrogen) must be reasonably short (e.g., covalent bond ~ 1.0A).
-            # - Acceptor-Hydrogen distance <= 3.0 A
-            # Since a1 and a2 are heavy atoms (O, N, etc.), one acts as donor, one as acceptor.
 
             # Determine appropriate r0_oo based on heavy atom elements
             if 'S' in (e1, e2):
@@ -186,28 +215,19 @@ def compute_edge_probabilities(g, u):
             best_prob = 0.0
 
             for idx, h_pos in enumerate(p_hs):
-                # Is a1 the donor or a2?
-                # The covalent bond is typically < 1.2 A
-                is_a1_donor = d1_array[idx] < 1.2
-                is_a2_donor = d2_array[idx] < 1.2
+                dist_DH = min(d1_array[idx], d2_array[idx])
+                dist_HA = max(d1_array[idx], d2_array[idx])
 
-                if not (is_a1_donor or is_a2_donor):
-                    continue
-
-                # Acceptor-Hydrogen distance
-                dist_HA = d2_array[idx] if is_a1_donor else d1_array[idx]
-                if dist_HA > 3.0:
-                    continue
-
-                # Valid H-bond geometry based on distance. Calculate continuous probability.
-                mod_rOiH = d1_array[idx]
-                mod_rOjH = d2_array[idx]
-                p = calculate_hbond_probability(
-                    mod_rOO, mod_rOiH, mod_rOjH,
+                p_base = calculate_hbond_probability(
+                    mod_rOO, dist_DH, dist_HA,
                     r0_oo=r0_oo_fixed,
                     r0_threshold=r0_threshold_fixed
                 )
-                best_prob = max(best_prob, p)
+                p_ha = switching_function(dist_HA, threshold=2.5)
+                p_covalent = switching_function(dist_DH, threshold=1.1)
+
+                p_i = p_base * p_ha * p_covalent
+                best_prob = 1.0 - (1.0 - best_prob) * (1.0 - p_i)
 
             prob = best_prob
 
@@ -229,16 +249,19 @@ def compute_edge_probabilities(g, u):
 
     return g
 
-def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3):
+def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperativity=0.92):
     """
-    Performs bounded multipath search to capture the entropic contribution
-    of the pathway ensemble.
+    Performs bounded multipath search, groups paths by terminal endpoint
+    and length, and returns the partition function sum (Z) across degenerate paths.
     """
     import heapq
+    from collections import defaultdict
 
     pq = []
     visited = set()
-    final_paths = []
+
+    # Store group data: (endpoint, length) -> list of (weight, path)
+    endpoint_groups = defaultdict(list)
 
     for root in root_indices:
         if root in g:
@@ -255,9 +278,9 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3):
         if len(path) > 1:
             prob = np.exp(-curr_weight)
             if prob >= prob_threshold:
-                final_paths.append((path, float(prob)))
-                if len(final_paths) >= MAX_PATHS:
-                    break
+                endpoint = path[-1]
+                path_length = len(path) - 1
+                endpoint_groups[(endpoint, path_length)].append((curr_weight, path))
 
         if depth >= max_depth:
             continue
@@ -267,11 +290,22 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3):
                 continue
 
             edge_weight = g[u_node][v_node]['weight']
-            next_weight = curr_weight + edge_weight * (COOPERATIVITY_FACTOR ** depth)
+            next_weight = curr_weight + edge_weight * (cooperativity ** depth)
             next_prob = np.exp(-next_weight)
 
             if next_prob >= prob_threshold:
                 next_path = path + [v_node]
                 heapq.heappush(pq, (next_weight, v_node, depth + 1, next_path))
 
-    return final_paths
+    # Compile partition sums and representative paths
+    final_results = []
+    for (endpoint, path_length), paths_data in endpoint_groups.items():
+        # Calculate Partition Sum: Z = sum(exp(-W_i))
+        z_total = sum(np.exp(-w) for w, p in paths_data)
+
+        # Representative path (lowest weight / highest probability)
+        best_path = min(paths_data, key=lambda x: x[0])[1]
+
+        final_results.append((best_path, float(z_total)))
+
+    return final_results

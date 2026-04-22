@@ -32,13 +32,20 @@ class TestAnalysis(unittest.TestCase):
 
 class TestMathUtils(unittest.TestCase):
     def test_switching_function(self):
-        # When dist == threshold, it should return the limit (power_num / power_den)
-        # For powers 8 and 12, limit is 8/12 = 2/3
-        self.assertAlmostEqual(switching_function(1.0, 1.0, 8, 12), 2.0 / 3.0)
+        # When dist >= threshold significantly, it should return ~0.0 due to Fermi-Dirac decay
+        # For exponent > 100, the function directly returns 0.0
+        self.assertAlmostEqual(switching_function(10.0, 1.0), 0.0)
+
+        # When dist <= threshold significantly, it should return ~1.0
+        # For exponent < -100, the function directly returns 1.0
+        self.assertAlmostEqual(switching_function(-10.0, 1.0), 1.0)
+
+        # When dist == threshold, it should return exactly 0.5
+        self.assertAlmostEqual(switching_function(1.0, 1.0), 0.5)
 
         # When dist < threshold, it should be high
         prob_high = switching_function(0.5, 1.0)
-        self.assertTrue(0 < prob_high <= 1)
+        self.assertTrue(0.5 < prob_high <= 1)
 
     def test_calculate_hbond_probability(self):
         # Ideal mock h-bond values

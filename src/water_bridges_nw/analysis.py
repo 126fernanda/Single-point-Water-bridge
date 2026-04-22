@@ -134,7 +134,7 @@ def sanitize_csv_field(field_value):
     return field_str
 
 def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resname WAT or resname HOH",
-                 stride=1, max_depth=10, min_depth=1, prob_threshold=1e-3, coarse_cutoff=3.5,
+                 stride=1, max_depth=10, min_depth=1, prob_threshold=1e-3, cooperativity=0.92, coarse_cutoff=3.5,
                  output_file="results.jsonl", csv_file=None, cluster=False, cluster_threshold=3.5):
     """
     Iterates over the trajectory and aggregates network pathways.
@@ -213,12 +213,12 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
         g = compute_edge_probabilities(g, u)
 
         # 3. Traverse
-        paths = traverse_network(g, root_indices, max_depth=max_depth, prob_threshold=prob_threshold)
+        paths = traverse_network(g, root_indices, max_depth=max_depth, prob_threshold=prob_threshold, cooperativity=cooperativity)
 
         total_paths += len(paths)
 
         frame_paths_data = []
-        for path_indices, prob in paths:
+        for path_indices, z_total in paths:
             path_len = len(path_indices) - 1
 
             if path_len < min_depth:
@@ -228,7 +228,7 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
                 found_large_path = True
 
             total_length_sum += path_len
-            total_prob_sum += prob
+            total_prob_sum += z_total
 
             path_tuple = tuple(int(n) for n in path_indices)
             path_frequency.setdefault(path_tuple, set()).add(frame_idx)
@@ -249,7 +249,7 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
                 "nodes": [int(n) for n in path_indices],
                 "atom_ids": atom_ids,
                 "coords": coords,
-                "probability": float(prob),
+                "probability": float(z_total),
                 "length": path_len,
                 "avg_oo_dist": avg_oo
             })
