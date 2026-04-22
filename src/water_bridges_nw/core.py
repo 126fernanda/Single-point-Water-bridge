@@ -34,7 +34,8 @@ def _get_element(atom):
     """
     Robustly resolves the element of an atom, preventing misclassification.
     Priority 1: atom.element (MDAnalysis standard).
-    Priority 2: Strip leading digits from atom.name and take the leading alphabetic substring.
+    Priority 2: Exact match in _NAME_TO_ELEMENT dictionary.
+    Priority 3: Strip leading digits from atom.name and take the leading alphabetic substring.
     """
     valid_elements = {"O", "N", "S", "F", "CL", "BR"}
     try:
@@ -45,7 +46,12 @@ def _get_element(atom):
     except AttributeError:
         pass
 
-    # Fallback: Strip leading digits and extract the leading alphabetic substring
+    # Fallback 1: Lookup exact names for common topologies (e.g., OW -> O, NZ -> N)
+    atom_name_upper = atom.name.strip().upper()
+    if atom_name_upper in _NAME_TO_ELEMENT:
+        return _NAME_TO_ELEMENT[atom_name_upper]
+
+    # Fallback 2: Strip leading digits and extract the leading alphabetic substring
     match = re.search(r'^[0-9]*([A-Za-z]+)', atom.name)
     if match:
         e = match.group(1).upper()
