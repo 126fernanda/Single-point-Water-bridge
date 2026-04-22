@@ -131,7 +131,6 @@ def compute_edge_probabilities(g, u):
     """
     edges_to_remove = []
     h_cache = {}
-    united_atom_skipped_edges = 0
 
     def get_hydrogens(atom):
         if atom.index in h_cache:
@@ -170,7 +169,8 @@ def compute_edge_probabilities(g, u):
         norm = np.linalg.norm(vec)
 
         if norm < 1e-6: # To avoid division by zero if positions exactly overlap
-            virtual_h = atom.position + np.array([1.0, 0.0, 0.0])
+            h_cache[atom.index] = []
+            return []
         else:
             # Scale to 1.0 A
             virtual_h = atom.position + (vec / norm) * 1.0
@@ -195,30 +195,32 @@ def compute_edge_probabilities(g, u):
         hs2 = get_hydrogens(a2)
         all_hs = hs1 + hs2
 
-        if not all_hs:
-            if e1 in {"O", "N", "S"} or e2 in {"O", "N", "S"}:
-                g[u_node][v_node]['united_atom_skip'] = True
-                united_atom_skipped_edges += 1
-            edges_to_remove.append((u_node, v_node))
-            continue
+        # Determine appropriate r0_oo based on heavy atom elements
+        if 'S' in (e1, e2):
+            r0_oo_fixed = 3.3
+            r0_threshold_fixed = 0.8
+        elif (e1, e2) in (('N', 'N'),):
+            r0_oo_fixed = 3.0
+            r0_threshold_fixed = 0.6
+        elif (e1, e2) in (('N', 'O'), ('O', 'N')):
+            r0_oo_fixed = 2.9
+            r0_threshold_fixed = 0.55
+        else: # O-O and defaults
+            r0_oo_fixed = 2.80
+            r0_threshold_fixed = 0.45
+
+        if not hs1 or not hs2:
+            # United-atom fallback: either side is missing hydrogens, ignore angle
+            prob = calculate_hbond_probability(
+                mod_rOO, None, None,
+                r0_oo=r0_oo_fixed,
+                r0_threshold=r0_threshold_fixed,
+                ignore_angle=True
+            )
         else:
             p_hs = np.array(all_hs)
             d1_array = distance_array(np.array([a1.position]), p_hs, box=u.dimensions)[0]
             d2_array = distance_array(np.array([a2.position]), p_hs, box=u.dimensions)[0]
-
-            # Determine appropriate r0_oo based on heavy atom elements
-            if 'S' in (e1, e2):
-                r0_oo_fixed = 3.3
-                r0_threshold_fixed = 0.8
-            elif (e1, e2) in (('N', 'N'),):
-                r0_oo_fixed = 3.0
-                r0_threshold_fixed = 0.6
-            elif (e1, e2) in (('N', 'O'), ('O', 'N')):
-                r0_oo_fixed = 2.9
-                r0_threshold_fixed = 0.55
-            else: # O-O and defaults
-                r0_oo_fixed = 2.80
-                r0_threshold_fixed = 0.45
 
             best_prob = 0.0
 
@@ -247,13 +249,6 @@ def compute_edge_probabilities(g, u):
             g[u_node][v_node]['weight'] = score
 
     g.remove_edges_from(edges_to_remove)
-
-    if united_atom_skipped_edges > 0:
-        logger.warning(
-            f"Skipped {united_atom_skipped_edges} edge(s) because neither connecting atom had explicit hydrogens. "
-            "If this count is high, you may be using a united-atom force field without explicit hydrogens. "
-            "Please provide an explicit-hydrogen topology for accurate water bridge detection."
-        )
 
     return g
 
@@ -286,7 +281,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
         if len(path) > 1:
             prob = np.exp(-curr_weight)
             if prob >= prob_threshold:
-                final_paths.append((path, float(prob)))
+                endpoint_groups[(u_node, len(path))].append((curr_weight, path))
 
         if depth >= max_depth:
             continue
