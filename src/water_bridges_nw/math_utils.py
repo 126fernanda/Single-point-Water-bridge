@@ -6,6 +6,11 @@ def switching_function(distance, threshold, power_num=8, power_den=12):
     switching functions used in HbondWire.f90.
     """
     ratio = distance / threshold
+    if ratio >= 1.0:
+        return 0.0
+    if ratio <= 0.0:
+        return 1.0
+
     numerator = 1.0 - (ratio ** power_num)
     denominator = 1.0 - (ratio ** power_den)
 
@@ -15,7 +20,7 @@ def switching_function(distance, threshold, power_num=8, power_den=12):
 
     return numerator / denominator
 
-def calculate_hbond_probability(mod_rOO, mod_rOiH, mod_rOjH, r0_oo=2.7, r0_threshold=0.5):
+def calculate_hbond_probability(mod_rOO, mod_rOiH, mod_rOjH, r0_oo=2.80, r0_threshold=0.45):
     """
     Evaluates the continuous hydrogen bond weight between two molecules.
     Based on Fortran logic:
