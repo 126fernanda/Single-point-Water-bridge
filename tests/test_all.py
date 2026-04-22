@@ -32,9 +32,11 @@ class TestAnalysis(unittest.TestCase):
 
 class TestMathUtils(unittest.TestCase):
     def test_switching_function(self):
-        # When dist == threshold, it should return the limit (power_num / power_den)
-        # For powers 8 and 12, limit is 8/12 = 2/3
-        self.assertAlmostEqual(switching_function(1.0, 1.0, 8, 12), 2.0 / 3.0)
+        # When dist >= threshold (ratio >= 1.0), it should return 0.0 to enforce monotonic decay
+        self.assertAlmostEqual(switching_function(1.0, 1.0, 8, 12), 0.0)
+
+        # When dist <= 0 (ratio <= 0.0), it should return 1.0 to clamp fully formed bonds
+        self.assertAlmostEqual(switching_function(0.0, 1.0, 8, 12), 1.0)
 
         # When dist < threshold, it should be high
         prob_high = switching_function(0.5, 1.0)
