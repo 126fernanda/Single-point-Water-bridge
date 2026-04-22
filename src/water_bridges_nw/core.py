@@ -174,6 +174,12 @@ def compute_edge_probabilities(g, u):
             v1 = atom.position - neighbor_pos[0]
             v1 /= np.linalg.norm(v1)
 
+        if norm < 1e-6: # To avoid division by zero if positions exactly overlap
+            h_cache[atom.index] = []
+            return []
+        else:
+            # Scale to 1.0 A
+            virtual_h = atom.position + (vec / norm) * 1.0
             # Generate an arbitrary orthogonal vector
             arb = np.array([1.0, 0.0, 0.0]) if abs(v1[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
             perp = np.cross(v1, arb)
@@ -247,6 +253,7 @@ def compute_edge_probabilities(g, u):
 
         if not hs1 or not hs2:
             # United-atom fallback: either side is missing hydrogens, ignore angle
+            prob = calculate_hbond_probability(
             best_prob = calculate_hbond_probability(
                 mod_rOO, None, None,
                 r0_oo=r0_oo_fixed,
@@ -315,6 +322,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
         if len(path) > 1:
             prob = np.exp(-curr_weight)
             if prob >= prob_threshold:
+                endpoint_groups[(u_node, len(path))].append((curr_weight, path))
                 endpoint_groups[u_node].append((curr_weight, path))
 
         if depth >= max_depth:
