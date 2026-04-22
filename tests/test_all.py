@@ -40,7 +40,7 @@ class TestMathUtils(unittest.TestCase):
 
         # When dist < threshold, it should be high
         prob_high = switching_function(0.5, 1.0)
-        self.assertTrue(0 < prob_high <= 1)
+        self.assertTrue(0.5 < prob_high <= 1)
 
     def test_calculate_hbond_probability(self):
         # Ideal mock h-bond values

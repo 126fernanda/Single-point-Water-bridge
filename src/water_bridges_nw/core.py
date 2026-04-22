@@ -142,20 +142,41 @@ def compute_edge_probabilities(g, u):
             h_cache[atom.index] = []
             return []
 
-        hs_positions = np.array([h.position for h in candidate_hs])
-        # Use distance_array for 1-to-many distance calculation
-        dists = distance_array(np.array([atom.position]), hs_positions, box=u.dimensions)[0]
+        if candidate_hs:
+            hs_positions = [h.position for h in candidate_hs]
+            h_cache[atom.index] = hs_positions
+            return hs_positions
 
-        bonded_hs = [candidate_hs[i] for i, d in enumerate(dists) if d <= 1.2]
+        # No explicit hydrogens found - United-Atom geometry projection
+        try:
+            bonded_heavy_atoms = atom.bonded_atoms
+        except MDAnalysis.exceptions.NoDataError:
+            bonded_heavy_atoms = []
 
-        if not bonded_hs:
+        if not bonded_heavy_atoms:
             elem = _get_element(atom)
             if elem in {"O", "N", "S"} and atom.index not in _warned_united_atom:
-                logger.warning(f"Heavy atom {elem} (index {atom.index}) has no bonded hydrogens. This may indicate a united-atom force field. Edge probability calculations might be impaired.")
+                logger.warning(f"Heavy atom {elem} (index {atom.index}) has no bonded hydrogens and no neighbors. Virtual projection failed.")
                 _warned_united_atom.add(atom.index)
+            h_cache[atom.index] = []
+            return []
 
-        h_cache[atom.index] = bonded_hs
-        return bonded_hs
+        # Geometric center of neighbors
+        neighbor_pos = np.array([neighbor.position for neighbor in bonded_heavy_atoms])
+        center = np.mean(neighbor_pos, axis=0)
+
+        # Vector from center to atom
+        vec = atom.position - center
+        norm = np.linalg.norm(vec)
+
+        if norm < 1e-6: # To avoid division by zero if positions exactly overlap
+            virtual_h = atom.position + np.array([1.0, 0.0, 0.0])
+        else:
+            # Scale to 1.0 A
+            virtual_h = atom.position + (vec / norm) * 1.0
+
+        h_cache[atom.index] = [virtual_h]
+        return [virtual_h]
 
     for u_node, v_node, data in g.edges(data=True):
         a1 = u.atoms[u_node]
@@ -181,14 +202,9 @@ def compute_edge_probabilities(g, u):
             edges_to_remove.append((u_node, v_node))
             continue
         else:
-            p_hs = np.array([h.position for h in all_hs])
+            p_hs = np.array(all_hs)
             d1_array = distance_array(np.array([a1.position]), p_hs, box=u.dimensions)[0]
             d2_array = distance_array(np.array([a2.position]), p_hs, box=u.dimensions)[0]
-
-            # Apply strict geometric filters:
-            # - Distance cutoff: At least one of the OH distances (donor-hydrogen) must be reasonably short (e.g., covalent bond ~ 1.0A).
-            # - Acceptor-Hydrogen distance <= 3.0 A
-            # Since a1 and a2 are heavy atoms (O, N, etc.), one acts as donor, one as acceptor.
 
             # Determine appropriate r0_oo based on heavy atom elements
             if 'S' in (e1, e2):
@@ -243,14 +259,17 @@ def compute_edge_probabilities(g, u):
 
 def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperativity=0.92):
     """
-    Performs bounded multipath search to capture the entropic contribution
-    of the pathway ensemble.
+    Performs bounded multipath search, groups paths by terminal endpoint
+    and length, and returns the partition function sum (Z) across degenerate paths.
     """
     import heapq
+    from collections import defaultdict
 
     pq = []
     visited = set()
-    final_paths = []
+
+    # Store group data: (endpoint, length) -> list of (weight, path)
+    endpoint_groups = defaultdict(list)
 
     for root in root_indices:
         if root in g:
@@ -284,4 +303,15 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
                 next_path = path + [v_node]
                 heapq.heappush(pq, (next_weight, v_node, depth + 1, next_path))
 
-    return final_paths
+    # Compile partition sums and representative paths
+    final_results = []
+    for (endpoint, path_length), paths_data in endpoint_groups.items():
+        # Calculate Partition Sum: Z = sum(exp(-W_i))
+        z_total = sum(np.exp(-w) for w, p in paths_data)
+
+        # Representative path (lowest weight / highest probability)
+        best_path = min(paths_data, key=lambda x: x[0])[1]
+
+        final_results.append((best_path, float(z_total)))
+
+    return final_results
