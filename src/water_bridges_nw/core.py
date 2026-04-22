@@ -12,15 +12,6 @@ MAX_PATHS = 500
 
 _warned_united_atom = set()
 
-_NAME_TO_ELEMENT = {
-    # Water Oxygens
-    "OW": "O", "OH2": "O", "OT": "O",
-    # Amino Acid Nitrogens
-    "NZ": "N", "ND1": "N", "ND2": "N", "NE": "N", "NE1": "N", "NE2": "N", "NH1": "N", "NH2": "N",
-    # Amino Acid Sulfurs
-    "SG": "S", "SD": "S"
-}
-
 def _is_hydrogen(a):
     """
     Tiered fallback to correctly identify if an atom is hydrogen.
