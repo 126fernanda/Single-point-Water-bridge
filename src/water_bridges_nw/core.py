@@ -4,7 +4,6 @@ import numpy as np
 import networkx as nx
 from MDAnalysis.lib.distances import capped_distance, distance_array
 from .math_utils import calculate_hbond_probability, switching_function
-import MDAnalysis.topology.guessers
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,8 @@ def _get_element(atom):
     """
     Robustly resolves the element of an atom, preventing misclassification.
     Priority 1: atom.element (MDAnalysis standard).
-    Priority 2: MDAnalysis.topology.guessers.guess_types fallback.
+    Priority 2: Exact match in _NAME_TO_ELEMENT dictionary.
+    Priority 3: Strip leading digits from atom.name and take the leading alphabetic substring.
     """
     valid_elements = {"O", "N", "S", "F", "CL", "BR"}
     try:
@@ -43,10 +43,15 @@ def _get_element(atom):
     except AttributeError:
         pass
 
-    # Fallback: MDAnalysis type guesser
-    guessed_type = MDAnalysis.topology.guessers.guess_types([atom.name])[0]
-    if guessed_type:
-        e = guessed_type.strip().upper()
+    # Fallback 1: Lookup exact names for common topologies (e.g., OW -> O, NZ -> N)
+    atom_name_upper = atom.name.strip().upper()
+    if atom_name_upper in _NAME_TO_ELEMENT:
+        return _NAME_TO_ELEMENT[atom_name_upper]
+
+    # Fallback 2: Strip leading digits and extract the leading alphabetic substring
+    match = re.search(r'^[0-9]*([A-Za-z]+)', atom.name)
+    if match:
+        e = match.group(1).upper()
         if e in valid_elements:
             return e
 
@@ -133,6 +138,9 @@ def compute_edge_probabilities(g, u):
             return h_cache[atom.index]
 
         candidate_hs = [a for a in atom.residue.atoms if _is_hydrogen(a)]
+        if not candidate_hs:
+            h_cache[atom.index] = []
+            return []
 
         if candidate_hs:
             hs_positions = [h.position for h in candidate_hs]
@@ -223,8 +231,8 @@ def compute_edge_probabilities(g, u):
                     r0_oo=r0_oo_fixed,
                     r0_threshold=r0_threshold_fixed
                 )
-                p_ha = switching_function(dist_HA, threshold=2.5)
-                p_covalent = switching_function(dist_DH, threshold=1.1)
+                p_ha = switching_function(dist_HA, threshold=2.5, power_num=6, power_den=12)
+                p_covalent = switching_function(dist_DH, threshold=1.1, power_num=6, power_den=12)
 
                 p_i = p_base * p_ha * p_covalent
                 best_prob = 1.0 - (1.0 - best_prob) * (1.0 - p_i)
@@ -278,9 +286,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
         if len(path) > 1:
             prob = np.exp(-curr_weight)
             if prob >= prob_threshold:
-                endpoint = path[-1]
-                path_length = len(path) - 1
-                endpoint_groups[(endpoint, path_length)].append((curr_weight, path))
+                final_paths.append((path, float(prob)))
 
         if depth >= max_depth:
             continue

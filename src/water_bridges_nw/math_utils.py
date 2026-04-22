@@ -6,14 +6,18 @@ def switching_function(distance, threshold, k=15):
     Fermi-Dirac logistic function for continuous asymptotic decay.
     P(r) = 1 / (1 + exp(k * (r - r_c)))
     """
-    # Protect against overflow in exp
-    exponent = k * (distance - threshold)
-    if exponent > 100:
+    ratio = distance / threshold
+    if ratio >= 1.0:
         return 0.0
-    elif exponent < -100:
+    if ratio <= 0.0:
         return 1.0
 
+    numerator = 1.0 - (ratio ** power_num)
+    denominator = 1.0 - (ratio ** power_den)
+
     return 1.0 / (1.0 + np.exp(exponent))
+
+    return numerator / denominator
 
 def calculate_hbond_probability(mod_rOO, mod_rOiH, mod_rOjH, r0_oo=2.80, r0_threshold=0.45):
     """

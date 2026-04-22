@@ -32,16 +32,11 @@ class TestAnalysis(unittest.TestCase):
 
 class TestMathUtils(unittest.TestCase):
     def test_switching_function(self):
-        # When dist >= threshold significantly, it should return ~0.0 due to Fermi-Dirac decay
-        # For exponent > 100, the function directly returns 0.0
-        self.assertAlmostEqual(switching_function(10.0, 1.0), 0.0)
+        # When dist >= threshold (ratio >= 1.0), it should return 0.0 to enforce monotonic decay
+        self.assertAlmostEqual(switching_function(1.0, 1.0, 8, 12), 0.0)
 
-        # When dist <= threshold significantly, it should return ~1.0
-        # For exponent < -100, the function directly returns 1.0
-        self.assertAlmostEqual(switching_function(-10.0, 1.0), 1.0)
-
-        # When dist == threshold, it should return exactly 0.5
-        self.assertAlmostEqual(switching_function(1.0, 1.0), 0.5)
+        # When dist <= 0 (ratio <= 0.0), it should return 1.0 to clamp fully formed bonds
+        self.assertAlmostEqual(switching_function(0.0, 1.0, 8, 12), 1.0)
 
         # When dist < threshold, it should be high
         prob_high = switching_function(0.5, 1.0)
