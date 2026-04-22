@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import networkx as nx
 from MDAnalysis.lib.distances import capped_distance, distance_array
-from .math_utils import calculate_hbond_probability
+from .math_utils import calculate_hbond_probability, switching_function
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +11,24 @@ COOPERATIVITY_FACTOR = 0.92
 MAX_PATHS = 500
 
 _warned_united_atom = set()
+
+def _is_hydrogen(a):
+    """
+    Tiered fallback to correctly identify if an atom is hydrogen.
+    1. Element (most reliable)
+    2. Mass (force-field agnostic)
+    3. Name/Type (last resort)
+    """
+    if getattr(a, 'element', '') and a.element.strip().upper() == 'H':
+        return True
+
+    try:
+        if 0.5 < a.mass < 2.5:
+            return True
+    except Exception:
+        pass
+
+    return bool(re.search(r'(?i)\bh', a.name)) or getattr(a, 'type', '') == 'H'
 
 def _get_element(atom):
     """
@@ -116,7 +134,7 @@ def compute_edge_probabilities(g, u):
         if atom.index in h_cache:
             return h_cache[atom.index]
 
-        candidate_hs = [a for a in atom.residue.atoms if a.name.startswith('H') or a.type == 'H']
+        candidate_hs = [a for a in atom.residue.atoms if _is_hydrogen(a)]
         if not candidate_hs:
             h_cache[atom.index] = []
             return []
@@ -186,28 +204,19 @@ def compute_edge_probabilities(g, u):
             best_prob = 0.0
 
             for idx, h_pos in enumerate(p_hs):
-                # Is a1 the donor or a2?
-                # The covalent bond is typically < 1.2 A
-                is_a1_donor = d1_array[idx] < 1.2
-                is_a2_donor = d2_array[idx] < 1.2
+                dist_DH = min(d1_array[idx], d2_array[idx])
+                dist_HA = max(d1_array[idx], d2_array[idx])
 
-                if not (is_a1_donor or is_a2_donor):
-                    continue
-
-                # Acceptor-Hydrogen distance
-                dist_HA = d2_array[idx] if is_a1_donor else d1_array[idx]
-                if dist_HA > 3.0:
-                    continue
-
-                # Valid H-bond geometry based on distance. Calculate continuous probability.
-                mod_rOiH = d1_array[idx]
-                mod_rOjH = d2_array[idx]
-                p = calculate_hbond_probability(
-                    mod_rOO, mod_rOiH, mod_rOjH,
+                p_base = calculate_hbond_probability(
+                    mod_rOO, dist_DH, dist_HA,
                     r0_oo=r0_oo_fixed,
                     r0_threshold=r0_threshold_fixed
                 )
-                best_prob = max(best_prob, p)
+                p_ha = switching_function(dist_HA, threshold=2.5, power_num=6, power_den=12)
+                p_covalent = switching_function(dist_DH, threshold=1.1, power_num=6, power_den=12)
+
+                p_i = p_base * p_ha * p_covalent
+                best_prob = 1.0 - (1.0 - best_prob) * (1.0 - p_i)
 
             prob = best_prob
 
