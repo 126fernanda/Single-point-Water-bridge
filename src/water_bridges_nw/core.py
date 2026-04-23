@@ -7,6 +7,12 @@ from .math_utils import calculate_hbond_probability, switching_function
 
 logger = logging.getLogger(__name__)
 
+_NAME_TO_ELEMENT = {
+    'OW': 'O', 'O1': 'O', 'O2': 'O', 'OD1': 'O', 'OD2': 'O', 'OE1': 'O', 'OE2': 'O', 'OG': 'O', 'OG1': 'O', 'OH': 'O',
+    'NZ': 'N', 'ND1': 'N', 'ND2': 'N', 'NE': 'N', 'NE1': 'N', 'NE2': 'N', 'NH1': 'N', 'NH2': 'N',
+    'SG': 'S', 'SD': 'S'
+}
+
 _warned_united_atom = set()
 
 def _is_hydrogen(a):
@@ -57,7 +63,7 @@ def _get_element(atom):
 
     return "UNKNOWN"
 
-def build_graph(u, water_atoms, root_atoms, max_distance=3.5, max_depth=5):
+def build_graph(u, water_atoms, root_atoms, max_distance=4.5, max_depth=5):
     """
     Builds a NetworkX graph representing potential hydrogen bonds
     using a shell-based iterative expansion to avoid global N^2 distance matrices.
@@ -131,52 +137,59 @@ def compute_edge_probabilities(g, u):
     """
     edges_to_remove = []
     h_cache = {}
-    united_atom_skipped_edges = 0
 
     def get_hydrogens(atom):
         if atom.index in h_cache:
             return h_cache[atom.index]
 
-        candidate_hs = [a for a in atom.residue.atoms if _is_hydrogen(a)]
-        if not candidate_hs:
-            h_cache[atom.index] = []
-            return []
+        explicit_hs = [bond.atom2 for bond in atom.bonds if bond.atom2.name.startswith('H')] + \
+                      [bond.atom1 for bond in atom.bonds if bond.atom1.name.startswith('H')]
 
-        if candidate_hs:
-            hs_positions = [h.position for h in candidate_hs]
-            h_cache[atom.index] = hs_positions
-            return hs_positions
+        if explicit_hs:
+            h_positions = [h.position for h in explicit_hs]
+            h_cache[atom.index] = h_positions
+            return h_positions
 
-        # No explicit hydrogens found - United-Atom geometry projection
-        try:
-            bonded_heavy_atoms = atom.bonded_atoms
-        except MDAnalysis.exceptions.NoDataError:
-            bonded_heavy_atoms = []
+        # Hybridization-aware United-Atom Approximation
+        bonded_heavy_atoms = [bond.atom2 for bond in atom.bonds if not bond.atom2.name.startswith('H')] + \
+                             [bond.atom1 for bond in atom.bonds if not bond.atom1.name.startswith('H')]
 
         if not bonded_heavy_atoms:
-            elem = _get_element(atom)
-            if elem in {"O", "N", "S"} and atom.index not in _warned_united_atom:
-                logger.warning(f"Heavy atom {elem} (index {atom.index}) has no bonded hydrogens and no neighbors. Virtual projection failed.")
-                _warned_united_atom.add(atom.index)
             h_cache[atom.index] = []
             return []
 
-        # Geometric center of neighbors
         neighbor_pos = np.array([neighbor.position for neighbor in bonded_heavy_atoms])
-        center = np.mean(neighbor_pos, axis=0)
 
-        # Vector from center to atom
-        vec = atom.position - center
-        norm = np.linalg.norm(vec)
+        if len(bonded_heavy_atoms) == 1:
+            v1 = atom.position - neighbor_pos[0]
+            v1 /= np.linalg.norm(v1)
+            arb = np.array([1.0, 0.0, 0.0]) if abs(v1[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+            perp = np.cross(v1, arb)
+            perp /= np.linalg.norm(perp)
+            cos_120, sin_120 = -0.5, 0.866
+            lp1 = atom.position + (v1 * cos_120 + perp * sin_120) * 1.0
+            lp2 = atom.position + (v1 * cos_120 - perp * sin_120) * 1.0
+            h_cache[atom.index] = [lp1, lp2]
+            return [lp1, lp2]
 
-        if norm < 1e-6: # To avoid division by zero if positions exactly overlap
-            virtual_h = atom.position + np.array([1.0, 0.0, 0.0])
+        elif len(bonded_heavy_atoms) == 2:
+            v1 = neighbor_pos[0] - atom.position
+            v2 = neighbor_pos[1] - atom.position
+            v1 /= np.linalg.norm(v1)
+            v2 /= np.linalg.norm(v2)
+            n = np.cross(v1, v2)
+            n /= np.linalg.norm(n)
+            bisector = v1 + v2
+            bisector /= np.linalg.norm(bisector)
+            cos_tilt, sin_tilt = -0.577, 0.816
+            lp1 = atom.position + (-bisector * cos_tilt + n * sin_tilt) * 1.0
+            lp2 = atom.position + (-bisector * cos_tilt - n * sin_tilt) * 1.0
+            h_cache[atom.index] = [lp1, lp2]
+            return [lp1, lp2]
+
         else:
-            # Scale to 1.0 A
-            virtual_h = atom.position + (vec / norm) * 1.0
-
-        h_cache[atom.index] = [virtual_h]
-        return [virtual_h]
+            h_cache[atom.index] = []
+            return []
 
     for u_node, v_node, data in g.edges(data=True):
         a1 = u.atoms[u_node]
@@ -195,30 +208,32 @@ def compute_edge_probabilities(g, u):
         hs2 = get_hydrogens(a2)
         all_hs = hs1 + hs2
 
-        if not all_hs:
-            if e1 in {"O", "N", "S"} or e2 in {"O", "N", "S"}:
-                g[u_node][v_node]['united_atom_skip'] = True
-                united_atom_skipped_edges += 1
-            edges_to_remove.append((u_node, v_node))
-            continue
+        # Determine appropriate r0_oo based on heavy atom elements
+        if 'S' in (e1, e2):
+            r0_oo_fixed = 3.3
+            r0_threshold_fixed = 0.8
+        elif (e1, e2) in (('N', 'N'),):
+            r0_oo_fixed = 3.0
+            r0_threshold_fixed = 0.6
+        elif (e1, e2) in (('N', 'O'), ('O', 'N')):
+            r0_oo_fixed = 2.9
+            r0_threshold_fixed = 0.55
+        else: # O-O and defaults
+            r0_oo_fixed = 2.80
+            r0_threshold_fixed = 0.45
+
+        if not hs1 or not hs2:
+            # United-atom fallback: either side is missing hydrogens, ignore angle
+            best_prob = calculate_hbond_probability(
+                mod_rOO, None, None,
+                r0_oo=r0_oo_fixed,
+                r0_threshold=r0_threshold_fixed,
+                ignore_angle=True
+            )
         else:
             p_hs = np.array(all_hs)
             d1_array = distance_array(np.array([a1.position]), p_hs, box=u.dimensions)[0]
             d2_array = distance_array(np.array([a2.position]), p_hs, box=u.dimensions)[0]
-
-            # Determine appropriate r0_oo based on heavy atom elements
-            if 'S' in (e1, e2):
-                r0_oo_fixed = 3.3
-                r0_threshold_fixed = 0.8
-            elif (e1, e2) in (('N', 'N'),):
-                r0_oo_fixed = 3.0
-                r0_threshold_fixed = 0.6
-            elif (e1, e2) in (('N', 'O'), ('O', 'N')):
-                r0_oo_fixed = 2.9
-                r0_threshold_fixed = 0.55
-            else: # O-O and defaults
-                r0_oo_fixed = 2.80
-                r0_threshold_fixed = 0.45
 
             best_prob = 0.0
 
@@ -237,23 +252,14 @@ def compute_edge_probabilities(g, u):
                 p_i = p_base * p_ha * p_covalent
                 best_prob = 1.0 - (1.0 - best_prob) * (1.0 - p_i)
 
-            prob = best_prob
-
-        if prob <= 0:
+        if best_prob <= 0:
             edges_to_remove.append((u_node, v_node))
         else:
-            score = -np.log(prob) if prob > 0 else float('inf')
-            g[u_node][v_node]['prob'] = prob
+            score = -np.log(best_prob) if best_prob > 0 else float('inf')
+            g[u_node][v_node]['prob'] = best_prob
             g[u_node][v_node]['weight'] = score
 
     g.remove_edges_from(edges_to_remove)
-
-    if united_atom_skipped_edges > 0:
-        logger.warning(
-            f"Skipped {united_atom_skipped_edges} edge(s) because neither connecting atom had explicit hydrogens. "
-            "If this count is high, you may be using a united-atom force field without explicit hydrogens. "
-            "Please provide an explicit-hydrogen topology for accurate water bridge detection."
-        )
 
     return g
 
@@ -268,7 +274,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
     pq = []
     visited = set()
 
-    # Store group data: (endpoint, length) -> list of (weight, path)
+    # Store group data: endpoint -> list of (weight, path)
     endpoint_groups = defaultdict(list)
 
     for root in root_indices:
@@ -286,7 +292,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
         if len(path) > 1:
             prob = np.exp(-curr_weight)
             if prob >= prob_threshold:
-                final_paths.append((path, float(prob)))
+                endpoint_groups[u_node].append((curr_weight, path))
 
         if depth >= max_depth:
             continue
@@ -305,7 +311,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
 
     # Compile partition sums and representative paths
     final_results = []
-    for (endpoint, path_length), paths_data in endpoint_groups.items():
+    for endpoint, paths_data in endpoint_groups.items():
         # Calculate Partition Sum: Z = sum(exp(-W_i))
         z_total = sum(np.exp(-w) for w, p in paths_data)
 
