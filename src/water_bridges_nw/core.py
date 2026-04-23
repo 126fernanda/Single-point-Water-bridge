@@ -174,6 +174,12 @@ def compute_edge_probabilities(g, u):
             v1 = atom.position - neighbor_pos[0]
             v1 /= np.linalg.norm(v1)
 
+        if norm < 1e-6: # To avoid division by zero if positions exactly overlap
+            h_cache[atom.index] = []
+            return []
+        else:
+            # Scale to 1.0 A
+            virtual_h = atom.position + (vec / norm) * 1.0
             # Generate an arbitrary orthogonal vector
             arb = np.array([1.0, 0.0, 0.0]) if abs(v1[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
             perp = np.cross(v1, arb)
@@ -193,6 +199,32 @@ def compute_edge_probabilities(g, u):
             v2 = neighbor_pos[1] - atom.position
             v1 /= np.linalg.norm(v1)
             v2 /= np.linalg.norm(v2)
+
+            # Normal to the plane defined by Atom and its 2 neighbors
+            n = np.cross(v1, v2)
+            n /= np.linalg.norm(n)
+
+            # Vector bisecting the angle
+            bisector = v1 + v2
+            bisector /= np.linalg.norm(bisector)
+
+
+            # Normal to the plane defined by Atom and its 2 neighbors
+            n = np.cross(v1, v2)
+            n /= np.linalg.norm(n)
+
+            # Vector bisecting the angle
+            bisector = v1 + v2
+            bisector /= np.linalg.norm(bisector)
+
+            # Project lone pairs outwards (tetrahedral geometry)
+            cos_tilt, sin_tilt = -0.577, 0.816 # approximate projection relative to bisector
+            lp1 = atom.position + (-bisector * cos_tilt + n * sin_tilt) * 1.0
+            lp2 = atom.position + (-bisector * cos_tilt - n * sin_tilt) * 1.0
+
+            h_cache[atom.index] = [lp1, lp2]
+            return [lp1, lp2]
+
 
             # Normal to the plane defined by Atom and its 2 neighbors
             n = np.cross(v1, v2)
@@ -247,6 +279,7 @@ def compute_edge_probabilities(g, u):
 
         if not hs1 or not hs2:
             # United-atom fallback: either side is missing hydrogens, ignore angle
+            prob = calculate_hbond_probability(
             best_prob = calculate_hbond_probability(
                 mod_rOO, None, None,
                 r0_oo=r0_oo_fixed,
@@ -315,6 +348,7 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
         if len(path) > 1:
             prob = np.exp(-curr_weight)
             if prob >= prob_threshold:
+                endpoint_groups[(u_node, len(path))].append((curr_weight, path))
                 endpoint_groups[u_node].append((curr_weight, path))
 
         if depth >= max_depth:
