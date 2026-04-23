@@ -142,27 +142,19 @@ def compute_edge_probabilities(g, u):
         if atom.index in h_cache:
             return h_cache[atom.index]
 
-        candidate_hs = [a for a in atom.residue.atoms if _is_hydrogen(a)]
-        if not candidate_hs:
-            h_cache[atom.index] = []
-            return []
+        explicit_hs = [bond.atom2 for bond in atom.bonds if bond.atom2.name.startswith('H')] + \
+                      [bond.atom1 for bond in atom.bonds if bond.atom1.name.startswith('H')]
 
-        if candidate_hs:
-            hs_positions = [h.position for h in candidate_hs]
-            h_cache[atom.index] = hs_positions
-            return hs_positions
+        if explicit_hs:
+            h_positions = [h.position for h in explicit_hs]
+            h_cache[atom.index] = h_positions
+            return h_positions
 
-        # No explicit hydrogens found - United-Atom geometry projection
-        try:
-            bonded_heavy_atoms = atom.bonded_atoms
-        except MDAnalysis.exceptions.NoDataError:
-            bonded_heavy_atoms = []
+        # Hybridization-aware United-Atom Approximation
+        bonded_heavy_atoms = [bond.atom2 for bond in atom.bonds if not bond.atom2.name.startswith('H')] + \
+                             [bond.atom1 for bond in atom.bonds if not bond.atom1.name.startswith('H')]
 
         if not bonded_heavy_atoms:
-            elem = _get_element(atom)
-            if elem in {"O", "N", "S"} and atom.index not in _warned_united_atom:
-                logger.warning(f"Heavy atom {elem} (index {atom.index}) has no bonded hydrogens and no neighbors. Virtual projection failed.")
-                _warned_united_atom.add(atom.index)
             h_cache[atom.index] = []
             return []
 
@@ -239,6 +231,36 @@ def compute_edge_probabilities(g, u):
             lp1 = atom.position + (-bisector * cos_tilt + n * sin_tilt) * 1.0
             lp2 = atom.position + (-bisector * cos_tilt - n * sin_tilt) * 1.0
 
+            h_cache[atom.index] = [lp1, lp2]
+            return [lp1, lp2]
+
+        else:
+        neighbor_pos = np.array([neighbor.position for neighbor in bonded_heavy_atoms])
+
+        if len(bonded_heavy_atoms) == 1:
+            v1 = atom.position - neighbor_pos[0]
+            v1 /= np.linalg.norm(v1)
+            arb = np.array([1.0, 0.0, 0.0]) if abs(v1[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+            perp = np.cross(v1, arb)
+            perp /= np.linalg.norm(perp)
+            cos_120, sin_120 = -0.5, 0.866
+            lp1 = atom.position + (v1 * cos_120 + perp * sin_120) * 1.0
+            lp2 = atom.position + (v1 * cos_120 - perp * sin_120) * 1.0
+            h_cache[atom.index] = [lp1, lp2]
+            return [lp1, lp2]
+
+        elif len(bonded_heavy_atoms) == 2:
+            v1 = neighbor_pos[0] - atom.position
+            v2 = neighbor_pos[1] - atom.position
+            v1 /= np.linalg.norm(v1)
+            v2 /= np.linalg.norm(v2)
+            n = np.cross(v1, v2)
+            n /= np.linalg.norm(n)
+            bisector = v1 + v2
+            bisector /= np.linalg.norm(bisector)
+            cos_tilt, sin_tilt = -0.577, 0.816
+            lp1 = atom.position + (-bisector * cos_tilt + n * sin_tilt) * 1.0
+            lp2 = atom.position + (-bisector * cos_tilt - n * sin_tilt) * 1.0
             h_cache[atom.index] = [lp1, lp2]
             return [lp1, lp2]
 
