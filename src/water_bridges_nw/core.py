@@ -216,6 +216,23 @@ def compute_edge_probabilities(g, u):
             h_cache[atom.index] = [lp1, lp2]
             return [lp1, lp2]
 
+
+            # Normal to the plane defined by Atom and its 2 neighbors
+            n = np.cross(v1, v2)
+            n /= np.linalg.norm(n)
+
+            # Vector bisecting the angle
+            bisector = v1 + v2
+            bisector /= np.linalg.norm(bisector)
+
+            # Project lone pairs outwards (tetrahedral geometry)
+            cos_tilt, sin_tilt = -0.577, 0.816 # approximate projection relative to bisector
+            lp1 = atom.position + (-bisector * cos_tilt + n * sin_tilt) * 1.0
+            lp2 = atom.position + (-bisector * cos_tilt - n * sin_tilt) * 1.0
+
+            h_cache[atom.index] = [lp1, lp2]
+            return [lp1, lp2]
+
         else:
             h_cache[atom.index] = []
             return []
