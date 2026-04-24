@@ -143,17 +143,19 @@ def compute_edge_probabilities(g, u):
         if atom.index in h_cache:
             return h_cache[atom.index]
 
-        explicit_hs = [bond.atom2 for bond in atom.bonds if bond.atom2.name.startswith('H')] + \
-                      [bond.atom1 for bond in atom.bonds if bond.atom1.name.startswith('H')]
+        explicit_hs = []
+        bonded_heavy_atoms = []
+        for bond in atom.bonds:
+            neighbor = bond.atom2 if bond.atom1.index == atom.index else bond.atom1
+            if _is_hydrogen(neighbor):
+                explicit_hs.append(neighbor)
+            else:
+                bonded_heavy_atoms.append(neighbor)
 
         if explicit_hs:
             h_positions = [h.position for h in explicit_hs]
             h_cache[atom.index] = h_positions
             return h_positions
-
-        # Hybridization-aware United-Atom Approximation
-        bonded_heavy_atoms = [bond.atom2 for bond in atom.bonds if not bond.atom2.name.startswith('H')] + \
-                             [bond.atom1 for bond in atom.bonds if not bond.atom1.name.startswith('H')]
 
         if not bonded_heavy_atoms:
             h_cache[atom.index] = []
