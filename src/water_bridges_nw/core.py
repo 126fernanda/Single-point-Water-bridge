@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 _NAME_TO_ELEMENT = {
     'OW': 'O', 'O1': 'O', 'O2': 'O', 'OD1': 'O', 'OD2': 'O', 'OE1': 'O', 'OE2': 'O', 'OG': 'O', 'OG1': 'O', 'OH': 'O',
+    'OXT': 'O', 'OH2': 'O', 'OC1': 'O', 'OC2': 'O', 'OW1': 'O',
     'NZ': 'N', 'ND1': 'N', 'ND2': 'N', 'NE': 'N', 'NE1': 'N', 'NE2': 'N', 'NH1': 'N', 'NH2': 'N',
     'SG': 'S', 'SD': 'S'
 }
@@ -31,7 +32,7 @@ def _is_hydrogen(a):
     except Exception:
         pass
 
-    return bool(re.search(r'(?i)\bh', a.name)) or getattr(a, 'type', '') == 'H'
+    return bool(re.search(r'(?i)^[0-9]*h', a.name)) or getattr(a, 'type', '') == 'H'
 
 def _get_element(atom):
     """
