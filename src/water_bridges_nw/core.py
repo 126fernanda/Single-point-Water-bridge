@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 _NAME_TO_ELEMENT = {
     'OW': 'O', 'O1': 'O', 'O2': 'O', 'OD1': 'O', 'OD2': 'O', 'OE1': 'O', 'OE2': 'O', 'OG': 'O', 'OG1': 'O', 'OH': 'O',
+    'OXT': 'O', 'OH2': 'O', 'OC1': 'O', 'OC2': 'O', 'OW1': 'O',
     'NZ': 'N', 'ND1': 'N', 'ND2': 'N', 'NE': 'N', 'NE1': 'N', 'NE2': 'N', 'NH1': 'N', 'NH2': 'N',
     'SG': 'S', 'SD': 'S'
 }
@@ -31,7 +32,7 @@ def _is_hydrogen(a):
     except Exception:
         pass
 
-    return bool(re.search(r'(?i)\bh', a.name)) or getattr(a, 'type', '') == 'H'
+    return bool(re.search(r'(?i)^[0-9]*h', a.name)) or getattr(a, 'type', '') == 'H'
 
 def _get_element(atom):
     """
@@ -136,23 +137,28 @@ def compute_edge_probabilities(g, u):
     by dynamically finding attached hydrogens.
     """
     edges_to_remove = []
+    ua_atom_indices = set()
     h_cache = {}
 
     def get_hydrogens(atom):
         if atom.index in h_cache:
             return h_cache[atom.index]
 
-        explicit_hs = [bond.atom2 for bond in atom.bonds if bond.atom2.name.startswith('H')] + \
-                      [bond.atom1 for bond in atom.bonds if bond.atom1.name.startswith('H')]
+        explicit_hs = []
+        bonded_heavy_atoms = []
+        for bond in atom.bonds:
+            neighbor = bond.atom2 if bond.atom1.index == atom.index else bond.atom1
+            if _is_hydrogen(neighbor):
+                explicit_hs.append(neighbor)
+            else:
+                bonded_heavy_atoms.append(neighbor)
 
         if explicit_hs:
             h_positions = [h.position for h in explicit_hs]
             h_cache[atom.index] = h_positions
             return h_positions
 
-        # Hybridization-aware United-Atom Approximation
-        bonded_heavy_atoms = [bond.atom2 for bond in atom.bonds if not bond.atom2.name.startswith('H')] + \
-                             [bond.atom1 for bond in atom.bonds if not bond.atom1.name.startswith('H')]
+        ua_atom_indices.add(atom.index)
 
         if not bonded_heavy_atoms:
             h_cache[atom.index] = []
@@ -247,7 +253,11 @@ def compute_edge_probabilities(g, u):
                     r0_threshold=r0_threshold_fixed
                 )
                 p_ha = switching_function(dist_HA, threshold=2.5, power_num=6, power_den=12)
-                p_covalent = switching_function(dist_DH, threshold=1.1, power_num=6, power_den=12)
+                is_virtual_h = (a1.index in ua_atom_indices or a2.index in ua_atom_indices)
+                if is_virtual_h:
+                    p_covalent = 1.0
+                else:
+                    p_covalent = switching_function(dist_DH, threshold=1.1, power_num=6, power_den=12)
 
                 p_i = p_base * p_ha * p_covalent
                 best_prob = 1.0 - (1.0 - best_prob) * (1.0 - p_i)
