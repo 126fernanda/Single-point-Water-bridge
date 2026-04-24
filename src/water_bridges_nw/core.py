@@ -137,6 +137,7 @@ def compute_edge_probabilities(g, u):
     by dynamically finding attached hydrogens.
     """
     edges_to_remove = []
+    ua_atom_indices = set()
     h_cache = {}
 
     def get_hydrogens(atom):
@@ -156,6 +157,8 @@ def compute_edge_probabilities(g, u):
             h_positions = [h.position for h in explicit_hs]
             h_cache[atom.index] = h_positions
             return h_positions
+
+        ua_atom_indices.add(atom.index)
 
         if not bonded_heavy_atoms:
             h_cache[atom.index] = []
@@ -250,7 +253,11 @@ def compute_edge_probabilities(g, u):
                     r0_threshold=r0_threshold_fixed
                 )
                 p_ha = switching_function(dist_HA, threshold=2.5, power_num=6, power_den=12)
-                p_covalent = switching_function(dist_DH, threshold=1.1, power_num=6, power_den=12)
+                is_virtual_h = (a1.index in ua_atom_indices or a2.index in ua_atom_indices)
+                if is_virtual_h:
+                    p_covalent = 1.0
+                else:
+                    p_covalent = switching_function(dist_DH, threshold=1.1, power_num=6, power_den=12)
 
                 p_i = p_base * p_ha * p_covalent
                 best_prob = 1.0 - (1.0 - best_prob) * (1.0 - p_i)
