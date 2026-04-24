@@ -27,7 +27,9 @@ def main():
     calc_parser.add_argument("--stride", type=int, default=1, help="Frame stride for trajectory processing.")
     calc_parser.add_argument("--max_depth", type=int, default=10, help="Maximum number of consecutive waters in a path.")
     calc_parser.add_argument("--min_depth", type=int, default=1, help="Minimum path length to save in results.")
-    calc_parser.add_argument("--prob_threshold", type=float, default=1e-3, help="Minimum cumulative probability threshold to keep exploring.")
+    calc_parser.add_argument("--prob_threshold", type=float, default=1e-3,
+        help="Deprecated. This parameter has no effect and will be removed "
+             "in a future version. Path termination is controlled by --max_depth.")
     calc_parser.add_argument("--cooperativity", type=float, default=0.92, help="Depth-dependent cooperativity factor for hydrogen bonds.")
     calc_parser.add_argument("--coarse_cutoff", type=float, default=4.5, help="Coarse distance cutoff (Angstroms) for initial graph building.")
     calc_parser.add_argument("--output", default="results.jsonl", help="Output JSON Lines file for storing the raw network data.")

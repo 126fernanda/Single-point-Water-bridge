@@ -274,35 +274,30 @@ def compute_edge_probabilities(g, u):
     return g
 
 def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperativity=0.92):
-    """
-    Performs bounded multipath search, groups paths by terminal endpoint
-    and length, and returns the partition function sum (Z) across degenerate paths.
-    """
     import heapq
+    import itertools
     from collections import defaultdict
 
     pq = []
     visited = set()
+    counter = itertools.count()
 
-    # Store group data: endpoint -> list of (weight, path)
     endpoint_groups = defaultdict(list)
 
     for root in root_indices:
         if root in g:
-            heapq.heappush(pq, (0.0, root, 0, [root]))
+            heapq.heappush(pq, (0.0, next(counter), root, 0, [root]))
 
     while pq:
-        curr_weight, u_node, depth, path = heapq.heappop(pq)
+        curr_weight, _, u_node, depth, path = heapq.heappop(pq)
 
-        state = (u_node, frozenset(path))
+        state = (u_node, tuple(path))
         if state in visited:
             continue
         visited.add(state)
 
         if len(path) > 1:
-            prob = np.exp(-curr_weight)
-            if prob >= prob_threshold:
-                endpoint_groups[u_node].append((curr_weight, path))
+            endpoint_groups[u_node].append((curr_weight, path))
 
         if depth >= max_depth:
             continue
@@ -313,21 +308,14 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
 
             edge_weight = g[u_node][v_node]['weight']
             next_weight = curr_weight + edge_weight * (cooperativity ** depth)
-            next_prob = np.exp(-next_weight)
 
-            if next_prob >= prob_threshold:
-                next_path = path + [v_node]
-                heapq.heappush(pq, (next_weight, v_node, depth + 1, next_path))
+            next_path = path + [v_node]
+            heapq.heappush(pq, (next_weight, next(counter), v_node, depth + 1, next_path))
 
-    # Compile partition sums and representative paths
     final_results = []
     for endpoint, paths_data in endpoint_groups.items():
-        # Calculate Partition Sum: Z = sum(exp(-W_i))
         z_total = sum(np.exp(-w) for w, p in paths_data)
-
-        # Representative path (lowest weight / highest probability)
         best_path = min(paths_data, key=lambda x: x[0])[1]
-
         final_results.append((best_path, float(z_total)))
 
     return final_results
