@@ -262,7 +262,7 @@ def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resna
                 safe_root_res = sanitize_csv_field(root_res)
                 safe_path_str = sanitize_csv_field(path_str)
 
-                csv_writer.writerow([frame_idx, safe_root_res, safe_path_str, path_len, prob, avg_oo])
+                csv_writer.writerow([frame_idx, safe_root_res, safe_path_str, path_len, z_total, avg_oo])
 
         # Write frame data immediately to release RAM
         out_f.write(json.dumps({"type": "frame", "frame_idx": frame_idx, "paths": frame_paths_data}) + '\n')
