@@ -160,21 +160,21 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
         logger.info(f"Chimera script written to {output_file} for frame {frame_idx}")
 
     elif mode == "density":
-        # Draw shapes
-        with open(output_file, 'w') as f:
-            f.write("from chimera import runCommand\n")
-            shape_idx = 0
+        bild_file = os.path.abspath(output_file.replace('.py', '.bild'))
+        with open(bild_file, 'w') as bild_f:
+            bild_f.write('.color cyan\n')
+            bild_f.write('.transparency 0.5\n')
             for f_idx, paths in frames.items():
                 for path in paths:
                     coords = path["coords"]
                     for i in range(len(coords) - 1):
                         p1 = coords[i]
                         p2 = coords[i+1]
-                        # chimera shape cylinder command
-                        cmd = f"shape cylinder radius 0.1 color cyan p1 {p1[0]},{p1[1]},{p1[2]} p2 {p2[0]},{p2[1]},{p2[2]} modelId 100"
-                        f.write(f"runCommand('{cmd}')\n")
-                        shape_idx += 1
-        logger.info(f"Chimera density script written to {output_file}")
+                        bild_f.write(f".cylinder {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} {p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f} 0.1\n")
+        with open(output_file, 'w') as f:
+            f.write("from chimera import runCommand\n")
+            f.write(f"runCommand('open {bild_file}')\n")
+        logger.info(f"Chimera density script written to {output_file} (BILD geometry: {bild_file})")
 
 def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, output_file="pathways_viz"):
     if not os.path.exists(data_file):
