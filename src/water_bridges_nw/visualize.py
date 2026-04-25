@@ -125,6 +125,8 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
             logger.info(f"PyMOL density script written to {output_file}")
 
         f.write("\ncmd.load_cgo(obj, 'water_network')\n")
+        if mode == "density":
+            f.write("cmd.set('cgo_transparency', 0.8, 'water_network')\n")
 
 def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None):
     """
