@@ -166,7 +166,7 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
         bild_file = os.path.abspath(output_file.replace('.py', '.bild'))
         with open(bild_file, 'w') as bild_f:
             bild_f.write('.color cyan\n')
-            bild_f.write('.transparency 0.5\n')
+            
             for f_idx, paths in frames.items():
                 for path in paths:
                     coords = path["coords"]
@@ -177,6 +177,7 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
         with open(output_file, 'w') as f:
             f.write("from chimera import runCommand\n")
             f.write(f"runCommand('open {bild_file}')\n")
+            f.write("runCommand('transparency 50')\n")
         logger.info(f"Chimera density script written to {output_file} (BILD geometry: {bild_file})")
 
 def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, output_file="pathways_viz"):
