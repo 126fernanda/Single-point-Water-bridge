@@ -148,10 +148,14 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
                 all_ids.update(i+1 for i in path["nodes"])
 
         with open(output_file, 'w') as f:
+            f.write("import chimera\n")
             f.write("from chimera import runCommand\n")
-            sel_str = ",".join(str(i) for i in all_ids)
-            f.write(f"runCommand('show @serialNumber={sel_str}')\n")
-            f.write(f"runCommand('repr stick @serialNumber={sel_str}')\n")
+            sel_str = ", ".join(str(i) for i in sorted(all_ids))
+            f.write(f"serial_set = set([{sel_str}])\n")
+            f.write("atoms = [a for m in chimera.openModels.list() for a in m.atoms if a.serialNumber in serial_set]\n")
+            f.write("chimera.selection.setCurrent(atoms)\n")
+            f.write("runCommand('show sel')\n")
+            f.write("runCommand('repr stick sel')\n")
 
         logger.info(f"Chimera script written to {output_file} for frame {frame_idx}")
 
