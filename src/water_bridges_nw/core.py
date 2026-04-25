@@ -282,6 +282,12 @@ def traverse_network(g, root_indices, max_depth=5, prob_threshold=1e-3, cooperat
     visited = set()
     counter = itertools.count()
 
+    if prob_threshold != 1e-3:
+        import warnings
+        warnings.warn("prob_threshold has no effect and will be removed in a future version. "
+                      "Path termination is controlled solely by max_depth.",
+                      DeprecationWarning, stacklevel=2)
+
     endpoint_groups = defaultdict(list)
 
     for root in root_indices:
