@@ -134,7 +134,7 @@ def sanitize_csv_field(field_value):
     return field_str
 
 def run_analysis(topo_file, traj_file, root_sel, water_sel="resname SOL or resname WAT or resname HOH",
-                 stride=1, max_depth=10, min_depth=1, prob_threshold=1e-3, cooperativity=0.92, coarse_cutoff=3.5,
+                 stride=1, max_depth=10, min_depth=1, prob_threshold=1e-3, cooperativity=0.92, coarse_cutoff=4.5,
                  output_file="results.jsonl", csv_file=None, cluster=False, cluster_threshold=3.5):
     """
     Iterates over the trajectory and aggregates network pathways.
