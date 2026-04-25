@@ -41,6 +41,7 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
             f.write("mol representation Licorice 0.3 12 12\n")
             f.write(f"mol selection \"index {indices_str}\"\n")
             f.write("mol addrep top\n")
+            f.write("mol delrep 0 top\n")
 
             # Optional: Move to the frame
             f.write(f"animate goto {frame_idx}\n")
@@ -58,7 +59,7 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
 
         with open(output_file, 'w') as f:
             f.write("graphics top delete all\n")
-            f.write("materials change opacity Ghost 0.1\n")
+            f.write("material change opacity Ghost 0.1\n")
             f.write("graphics top material Ghost\n")
             f.write("graphics top color cyan\n\n")
 
