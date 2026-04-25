@@ -7,10 +7,13 @@ logger = logging.getLogger(__name__)
 def read_jsonl(data_file):
     frames = {}
     with open(data_file, 'r') as f:
-        for line in f:
-            obj = json.loads(line)
-            if obj.get('type') == 'frame':
-                frames[str(obj['frame_idx'])] = obj['paths']
+            for line in f:
+                obj = json.loads(line)
+                if obj.get('type') == 'frame':
+                    f_idx = str(obj['frame_idx'])
+                    if f_idx not in frames:
+                        frames[f_idx] = []
+                    frames[f_idx].extend(obj['paths'])
     return frames
 
 def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", frame_idx=None):
