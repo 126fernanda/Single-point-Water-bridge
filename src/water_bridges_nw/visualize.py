@@ -41,6 +41,7 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
             f.write("mol representation Licorice 0.3 12 12\n")
             f.write(f"mol selection \"index {indices_str}\"\n")
             f.write("mol addrep top\n")
+            f.write("mol delrep 0 top\n")
 
             # Optional: Move to the frame
             f.write(f"animate goto {frame_idx}\n")
@@ -58,7 +59,7 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
 
         with open(output_file, 'w') as f:
             f.write("graphics top delete all\n")
-            f.write("materials change opacity Ghost 0.1\n")
+            f.write("material change opacity Ghost 0.1\n")
             f.write("graphics top material Ghost\n")
             f.write("graphics top color cyan\n\n")
 
@@ -147,29 +148,33 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
                 all_ids.update(i+1 for i in path["nodes"])
 
         with open(output_file, 'w') as f:
+            f.write("import chimera\n")
             f.write("from chimera import runCommand\n")
-            sel_str = ",".join(str(i) for i in all_ids)
-            f.write(f"runCommand('show @serialNumber={sel_str}')\n")
-            f.write(f"runCommand('repr stick @serialNumber={sel_str}')\n")
+            sel_str = ", ".join(str(i) for i in sorted(all_ids))
+            f.write(f"serial_set = set([{sel_str}])\n")
+            f.write("atoms = [a for m in chimera.openModels.list() for a in m.atoms if a.serialNumber in serial_set]\n")
+            f.write("chimera.selection.setCurrent(atoms)\n")
+            f.write("runCommand('show sel')\n")
+            f.write("runCommand('repr stick sel')\n")
 
         logger.info(f"Chimera script written to {output_file} for frame {frame_idx}")
 
     elif mode == "density":
-        # Draw shapes
-        with open(output_file, 'w') as f:
-            f.write("from chimera import runCommand\n")
-            shape_idx = 0
+        bild_file = os.path.abspath(output_file.replace('.py', '.bild'))
+        with open(bild_file, 'w') as bild_f:
+            bild_f.write('.color cyan\n')
+            bild_f.write('.transparency 0.5\n')
             for f_idx, paths in frames.items():
                 for path in paths:
                     coords = path["coords"]
                     for i in range(len(coords) - 1):
                         p1 = coords[i]
                         p2 = coords[i+1]
-                        # chimera shape cylinder command
-                        cmd = f"shape cylinder radius 0.1 color cyan p1 {p1[0]},{p1[1]},{p1[2]} p2 {p2[0]},{p2[1]},{p2[2]} modelId 100"
-                        f.write(f"runCommand('{cmd}')\n")
-                        shape_idx += 1
-        logger.info(f"Chimera density script written to {output_file}")
+                        bild_f.write(f".cylinder {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} {p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f} 0.1\n")
+        with open(output_file, 'w') as f:
+            f.write("from chimera import runCommand\n")
+            f.write(f"runCommand('open {bild_file}')\n")
+        logger.info(f"Chimera density script written to {output_file} (BILD geometry: {bild_file})")
 
 def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, output_file="pathways_viz"):
     if not os.path.exists(data_file):
