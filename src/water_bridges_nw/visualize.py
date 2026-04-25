@@ -58,7 +58,7 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
 
         with open(output_file, 'w') as f:
             f.write("graphics top delete all\n")
-            f.write("materials change opacity Ghost 0.1\n")
+            f.write("material change opacity Ghost 0.1\n")
             f.write("graphics top material Ghost\n")
             f.write("graphics top color cyan\n\n")
 
