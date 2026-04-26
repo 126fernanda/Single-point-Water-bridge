@@ -106,6 +106,7 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
 
             if frame_idx is None:
                 logger.error("No frames available for visualization.")
+                f.write("\ncmd.load_cgo(obj, 'water_network')\n")
                 return
 
             paths = frames[str(frame_idx)]
