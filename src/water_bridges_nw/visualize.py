@@ -8,6 +8,8 @@ def read_jsonl(data_file):
     frames = {}
     with open(data_file, 'r') as f:
             for line in f:
+                if not line.strip():
+                    continue
                 obj = json.loads(line)
                 if obj.get('type') == 'frame':
                     f_idx = str(obj['frame_idx'])
