@@ -7,10 +7,13 @@ logger = logging.getLogger(__name__)
 def read_jsonl(data_file):
     frames = {}
     with open(data_file, 'r') as f:
-        for line in f:
-            obj = json.loads(line)
-            if obj.get('type') == 'frame':
-                frames[str(obj['frame_idx'])] = obj['paths']
+            for line in f:
+                obj = json.loads(line)
+                if obj.get('type') == 'frame':
+                    f_idx = str(obj['frame_idx'])
+                    if f_idx not in frames:
+                        frames[f_idx] = []
+                    frames[f_idx].extend(obj['paths'])
     return frames
 
 def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", frame_idx=None):
@@ -35,6 +38,10 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
             all_indices.update(path["nodes"])
 
         indices_str = " ".join(str(i) for i in all_indices)
+
+        if not indices_str:
+            logger.warning(f"No paths found for frame {frame_idx}. Skipping VMD script generation to prevent Tcl crash.")
+            return
 
         with open(output_file, 'w') as f:
             f.write("mol color Name\n")
@@ -122,6 +129,8 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
             logger.info(f"PyMOL density script written to {output_file}")
 
         f.write("\ncmd.load_cgo(obj, 'water_network')\n")
+        if mode == "density":
+            f.write("cmd.set('cgo_transparency', 0.8, 'water_network')\n")
 
 def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None):
     """
@@ -172,8 +181,12 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
                         p2 = coords[i+1]
                         bild_f.write(f".cylinder {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} {p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f} 0.1\n")
         with open(output_file, 'w') as f:
-            f.write("from chimera import runCommand\n")
-            f.write(f"runCommand('open {bild_file}')\n")
+            f.write("from chimera import runCommand, openModels\n")
+            f.write("before_models = set(openModels.list())\n")
+            f.write(f"runCommand(\"open '{bild_file}'\")\n")
+            f.write("new_models = set(openModels.list()) - before_models\n")
+            f.write("for m in new_models:\n")
+            f.write("    runCommand(f'transparency 50 models #{m.id}')\n")
         logger.info(f"Chimera density script written to {output_file} (BILD geometry: {bild_file})")
 
 def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, output_file="pathways_viz"):
