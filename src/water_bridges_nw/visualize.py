@@ -187,7 +187,7 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
             f.write(f"runCommand(\"open '{bild_file}'\")\n")
             f.write("new_models = set(openModels.list()) - before_models\n")
             f.write("for m in new_models:\n")
-            f.write("    runCommand(f'transparency 50 models #{m.id}')\n")
+            f.write("    runCommand('transparency 50 models #{}'.format(m.id))\n")
         logger.info(f"Chimera density script written to {output_file} (BILD geometry: {bild_file})")
 
 def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, output_file="pathways_viz"):
