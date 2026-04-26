@@ -39,6 +39,10 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
 
         indices_str = " ".join(str(i) for i in all_indices)
 
+        if not indices_str:
+            logger.warning(f"No paths found for frame {frame_idx}. Skipping VMD script generation to prevent Tcl crash.")
+            return
+
         with open(output_file, 'w') as f:
             f.write("mol color Name\n")
             f.write("mol representation Licorice 0.3 12 12\n")
