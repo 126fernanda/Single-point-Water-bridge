@@ -172,7 +172,7 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
         bild_file = os.path.abspath(output_file.replace('.py', '.bild'))
         with open(bild_file, 'w') as bild_f:
             bild_f.write('.color cyan\n')
-            bild_f.write('.transparency 0.5\n')
+            
             for f_idx, paths in frames.items():
                 for path in paths:
                     coords = path["coords"]
