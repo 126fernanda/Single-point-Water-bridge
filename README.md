@@ -87,9 +87,6 @@ water_bridges_nw calculate \
 | `--cluster` | off | Enable post-analysis spatial clustering of paths. Writes `clustered_pathways.json`. |
 | `--cluster_threshold` | `3.5` | Hausdorff distance threshold in Å for clustering. |
 
-> **Note:** `--prob_threshold` is accepted by the CLI for backwards
-> compatibility but has no effect on results. Path termination is
-> controlled exclusively by `--max_depth`.
 
 ### 2. Visualize
 
