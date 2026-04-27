@@ -131,9 +131,6 @@ and verify that hydrogens are present in the topology.
 
 ## Limitations
 
-Understanding what this tool does and does not model helps you interpret
-its output correctly.
-
 ### What the tool is designed for
 
 - Identifying **water bridge networks** connecting a root residue to bulk
