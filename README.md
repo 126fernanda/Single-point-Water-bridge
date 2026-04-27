@@ -1,111 +1,197 @@
 # water_bridges-nw
 
-`water_bridges-Nw` is a high-performance Python framework for the discovery and statistical analysis of water-mediated hydrogen-bond networks (water bridges) in molecular dynamics (MD) trajectories. By merging the directional logic of tunnel-search algorithms with a continuous probabilistic model, it identifies functional "water wires" and multi-order water bridge pathways that traditional geometric cut-offs often miss.
+`water_bridges-nw` is a Python framework for the discovery and statistical
+analysis of water-mediated hydrogen-bond networks (water bridges) in molecular
+dynamics (MD) trajectories. It combines a continuous probabilistic H-bond
+scoring model with graph-based path enumeration to identify multi-order water
+bridge pathways and their temporal occupancy across simulation frames.
 
-## Features and Utilities
+## Features
 
-*   **Multi-Order Water Bridge Discovery:** Unlike tools limited to first-order bridges, this package utilizes a shell-based Breadth-First Search (BFS) to identify complex, higher-order water bridges. It originates from a single user-defined root to explore how these bridges organically extend into the bulk solvent.
-*   **Continuous Probabilistic Bridge Scoring:** Replaces rigid binary cut-offs with fractional switching functions. This evaluates the stability of a water bridge based on:
-    *   **Heavy-Atom Geometry:** Tunable $r_{OO}$ distance factors.
-    *   **Angular Alignment:** Rewards linear donor-hydrogen-acceptor arrangements.
-    *   **Chemical Specificity:** Adjusts bridge probability based on atom elements (e.g., Nitrogen vs. Oxygen vs. Sulfur).
-*   **Dijkstra-Driven Path Optimization:** Employs a weighted graph traversal to determine the "Most Probable Path" for any given water bridge network. By converting probabilities into logarithmic weights, it effectively prunes low-probability noise to focus on chemically significant water-mediated interactions.
-*   **Temporal Bridge Clustering:** Includes a post-processing module that uses Directed Hausdorff Distances to perform hierarchical clustering of pathways. This allows for the identification of "Collective Pathways" persistent bridge networks that appear across multiple frames, calculating their occupancy and defining representative clusters.
-*   **Two-Phase Execution Architecture:**
-    *   **Phase 1 (Calculate):** Processes trajectory data frame-by-frame using `MDAnalysis` and `NetworkX` to evaluate potential edges and aggregate statistical pathways. Employs a zero-memory-growth O(1) tracking architecture, streaming outputs safely via `JSON Lines (.jsonl)` and structured `.csv` to prevent RAM exhaustion.
-    *   **Phase 2 (Visualize):** Parses the calculated data and seamlessly generates visualization scripts.
-*   **High-Performance Visualizations:** Decoupled visualization logic exports powerful scripts targeting PyMOL (CGO cylinders), VMD (Dynamic Tcl selection indexing), and UCSF Chimera (`.py`/`.cmd`). Explicitly maps the true topological `.id` to guarantee 100% accurate visual rendering of pathways even across structurally gapped or complex topologies.
-*   **Temporal Clustering:** Groups structurally similar pathways discovered across varying simulation frames into robust "collective pathways" using hierarchical average-link clustering and directed Hausdorff distance metrics, quantifying true thermodynamic occupancy over time.
+- **Multi-order water bridge discovery:** A depth-bounded graph traversal
+  originating from a user-defined root residue identifies water bridges
+  up to `max_depth` consecutive waters into the solvent.
+
+- **Continuous probabilistic scoring:** Replaces binary geometric cutoffs
+  with fractional switching functions that evaluate:
+  - Heavy-atom O···O distance
+  - Angular donor-hydrogen-acceptor alignment via a triangle-inequality proxy
+  - Steric repulsion for clash geometries (r_OO < 2.40 Å)
+  - Chemical specificity: per-element r0 reference distances for N, O, S
+
+- **Weighted path enumeration:** Edge probabilities are converted to
+  logarithmic weights so that path traversal naturally ranks higher-probability
+  chains above weaker ones within the depth limit.
+
+- **Temporal occupancy statistics:** Tracks which specific water-molecule
+  chains appear in each frame and reports the top 20 paths ranked by
+  frame-count occupancy.
+
+- **Pathway clustering:** Optional post-processing groups spatially similar
+  paths across frames using directed Hausdorff distance and average-link
+  hierarchical clustering, producing a `clustered_pathways.json` file with
+  cluster size, occupancy, average probability, and a representative
+  medoid geometry.
+
+- **Two-phase execution:**
+  - **Phase 1 — `calculate`:** Processes trajectory frames via MDAnalysis
+    and NetworkX. Streams output as JSON Lines (`.jsonl`) and optional `.csv`
+    to avoid RAM exhaustion on long trajectories.
+  - **Phase 2 — `visualize`:** Parses `.jsonl` output and generates
+    ready-to-run scripts for PyMOL (CGO cylinders), VMD (Tcl atom
+    index selection), and UCSF Chimera (`.py` / `.bild`).
 
 ## Installation
 
-The package requires Python 3.8 or higher. You can install `water_bridges-Nw` directly via pip.
-
-To install it from the repository root:
+Requires Python 3.8 or higher.
 
 ```bash
+# Standard install from repository root
 pip install .
-```
 
-For development mode, run:
-
-```bash
+# Development (editable) install
 pip install -e .
 ```
 
 ## Usage
 
-The package is run via a unified Command-Line Interface (CLI): `water_bridges_nw`.
-
-### 1. Calculation Phase
-Analyze your MD trajectory to discover water-mediated networks. By default, the output is saved to `results.jsonl`.
+### 1. Calculate
 
 ```bash
 water_bridges_nw calculate \
-  --topo my_topology.pdb \
-  --traj my_trajectory.xtc \
-  --root "resname LIG and name O1" \
+  --topo  my_topology.pdb \
+  --traj  my_trajectory.xtc \
+  --root  "resname LIG and name O1" \
   --stride 10 \
   --max_depth 10 \
   --min_depth 3 \
-  --prob_threshold 0.001 \
-  --coarse_cutoff 3.5 \
-  --output custom_results.jsonl \
-  --csv custom_summary.csv \
+  --coarse_cutoff 4.5 \
+  --output results.jsonl \
+  --csv   summary.csv \
   --cluster \
   --cluster_threshold 3.5
 ```
 
-*Options:*
-*   `--topo`: Topology file (.pdb, .tpr, etc.)
-*   `--traj`: Trajectory file (.xtc, .dcd). If omitted, evaluates only the topology.
-*   `--root`: Standard MDAnalysis atom selection string defining the starting root coordinate. Supports `resname`, `resid`, and `name` strings.
-*   `--water`: Selection string for solvent (default: `"resname SOL or resname WAT or resname HOH"`).
-*   `--stride`: Frame stride to process. *(Note: A warning is issued if the evaluated frames exceed 1000)*
-*   `--max_depth`: Maximum chain length of sequential waters (default: `10`).
-*   `--min_depth`: Minimum chain length filter. Shorter paths will be discarded (default: `1`).
-*   `--prob_threshold`: Cumulative probabilistic threshold; paths falling below this probability are pruned (default: `0.001`).
-*   `--coarse_cutoff`: Coarse distance cutoff (Angstroms) for initial graph building (default: `3.5`).
-*   `--output`: Custom filename for the detailed `JSON Lines` output (default: `results.jsonl`).
-*   `--csv`: Optional custom filename to generate a structured, human-readable summary of the detected paths.
-*   `--cluster`: Enable temporal clustering of pathways post-analysis. Generates a `clustered_pathways.json` file detailing collective pathways, average probabilities, and temporal occupancies.
-*   `--cluster_threshold`: Spatial distance threshold for pathway clustering in Angstroms (default: `3.5`).
+| Option | Default | Description |
+|---|---|---|
+| `--topo` | required | Topology file (.pdb, .tpr, …) |
+| `--traj` | — | Trajectory file (.xtc, .dcd, …). Omit to evaluate topology only. |
+| `--root` | required | MDAnalysis selection string for the root atom(s) (e.g. `"resname LIG"`). |
+| `--water` | `"resname SOL or resname WAT or resname HOH"` | Solvent selection string. |
+| `--stride` | `1` | Process every Nth frame. A warning is issued when `stride=1` and the trajectory exceeds 1000 frames. |
+| `--max_depth` | `10` | Maximum number of sequential water molecules in a path. |
+| `--min_depth` | `1` | Minimum path length; shorter paths are discarded from output. |
+| `--coarse_cutoff` | `4.5` | Distance cutoff in Å for initial neighbour graph construction. |
+| `--output` | `results.jsonl` | Output file for full frame-by-frame path data (JSON Lines format). |
+| `--csv` | — | Optional human-readable CSV summary of detected paths. |
+| `--cluster` | off | Enable post-analysis spatial clustering of paths. Writes `clustered_pathways.json`. |
+| `--cluster_threshold` | `3.5` | Hausdorff distance threshold in Å for clustering. |
 
-### 2. Visualization Phase
-Generate rendering scripts from your calculation output.
+> **Note:** `--prob_threshold` is accepted by the CLI for backwards
+> compatibility but has no effect on results. Path termination is
+> controlled exclusively by `--max_depth`.
 
-**Generate a density map (all frames overlaid) for PyMOL:**
+### 2. Visualize
+
 ```bash
+# Density overlay across all frames — PyMOL
 water_bridges_nw visualize \
-  --data custom_results.jsonl \
-  --format pymol \
-  --mode density \
-  --output my_density_network.py
+  --data results.jsonl --format pymol --mode density \
+  --output network_density.py
+
+# Single-frame selection — VMD
+water_bridges_nw visualize \
+  --data results.jsonl --format vmd --mode frame --frame 10 \
+  --output frame_10.tcl
+
+# Single-frame selection — UCSF Chimera
+water_bridges_nw visualize \
+  --data results.jsonl --format chimera --mode frame --frame 10 \
+  --output frame_10.py
 ```
 
-**Generate a pathway view for a specific frame in VMD:**
+| Option | Description |
+|---|---|
+| `--data` | `.jsonl` file produced by `calculate`. |
+| `--format` | `vmd`, `pymol`, or `chimera`. |
+| `--mode` | `density` (all frames overlaid) or `frame` (single frame). |
+| `--frame` | Frame index to visualize; required when `--mode frame`. |
+| `--output` | Output script filename or prefix (default: `pathways_viz`). |
+
+## Solvent naming conventions
+
+The default water selection covers GROMACS (`SOL`), AMBER (`WAT`), and
+CHARMM/PDB (`HOH`) residue names. For non-standard solvents or co-solvents
+acting as bridge donors, pass a custom `--water` string, for example:
+
 ```bash
-water_bridges_nw visualize \
-  --data custom_results.jsonl \
-  --format vmd \
-  --mode frame \
-  --frame 10 \
-  --output frame_10_network.tcl
+--water "resname SOL or resname GOL"
 ```
 
-**Generate a pathway view for a specific frame in UCSF Chimera:**
-```bash
-water_bridges_nw visualize \
-  --data custom_results.jsonl \
-  --format chimera \
-  --mode frame \
-  --frame 10 \
-  --output frame_10_network.py
-```
+For united-atom force fields (GROMOS, OPLS-UA) or coarse-grained models,
+consult the force-field documentation for the correct oxygen atom names
+and verify that hydrogens are present in the topology.
 
-*Options:*
-*   `--data`: The `.jsonl` output generated by the `calculate` subcommand.
-*   `--format`: Target visualization software (`vmd`, `pymol`, or `chimera`).
-*   `--mode`: Either `density` (overlays pathways across all analyzed frames) or `frame` (extracts a single frame).
-*   `--frame`: Index of the frame to visualize (required if `--mode frame` is used).
-*   `--output`: Custom filename/prefix for the exported script to prevent overwriting outputs (default: `pathways_viz`).
+## Limitations
+
+Understanding what this tool does and does not model helps you interpret
+its output correctly.
+
+### What the tool is designed for
+
+- Identifying **water bridge networks** connecting a root residue to bulk
+  solvent across one or more water molecules in standard all-atom MD.
+- Ranking bridges by **temporal occupancy** (fraction of frames in which
+  a given atom-index chain appears).
+- Generating **spatial cluster representatives** for bridges that recur
+  across many frames.
+- Producing **density maps** of where water-mediated interactions occur
+  near a binding site or protein surface.
+
+### What the tool does not model
+
+**Periodic boundary conditions in path coordinates.** The neighbour graph
+is built with distance-based selection (which MDAnalysis applies with PBC
+awareness), but the 3D coordinates stored for each path node are raw
+wrapped positions. Paths that cross a periodic boundary will display as
+broken or elongated segments in visualization software. This affects
+trajectories where the root residue and solvent are in different periodic
+images.
+
+**Water molecule exchange along a pathway.** Occupancy is tracked by
+exact atom-index tuples. If the same physical channel is traversed by
+different water molecules at different times — common in trajectories
+longer than a few nanoseconds — each unique permutation is counted as a
+separate path. Temporal occupancy will be underestimated for highly
+dynamic pathways. The spatial clustering step partially compensates
+for this.
+
+**Proton-conducting (Grotthuss) water wires.** The algorithm is
+undirected: it detects chains of mutually compatible H-bond geometries
+but does not verify that water dipoles are aligned head-to-tail, which
+is the physical requirement for proton transport. An antiparallel pair
+that blocks conductance is geometrically indistinguishable from a
+conducting pair in the current model. If you are studying aquaporins,
+gramicidin channels, or other systems where proton-wire directionality
+matters, the occupancy output should be interpreted as a measure of
+**structural presence**, not **transport competence**.
+
+**Transmembrane pathways crossing the periodic boundary.** Wires
+spanning the full membrane thickness cross periodic images. Because
+path coordinates are not minimum-image corrected, these wires will
+not be reliably detected or visualised.
+
+**Consecutive-frame persistence.** A path that appears in 100 frames
+scattered across a 10 000-frame trajectory receives the same
+occupancy score (0.01) as a path present in 100 consecutive frames.
+Only the latter constitutes a genuinely persistent structural feature.
+If persistence matters for your analysis, filter the `top_paths` output
+manually or apply the `--cluster` option, which groups paths by spatial
+similarity and reports per-cluster occupancy.
+
+**Very large path counts.** The clustering step computes a full
+pairwise Hausdorff distance matrix, which scales as O(N²) in the
+number of paths. For long trajectories with a high branching factor,
+the clustering step can become slow or memory-intensive. Use
+`--stride` to reduce frame count or increase `--min_depth` to
+reduce the number of short paths before enabling `--cluster`.
