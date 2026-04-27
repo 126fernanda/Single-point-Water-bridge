@@ -147,7 +147,7 @@ def compute_edge_probabilities(g, u):
         explicit_hs = []
         bonded_heavy_atoms = []
         for bond in atom.bonds:
-            neighbor = bond.atom2 if bond.atom1.index == atom.index else bond.atom1
+            neighbor = bond.atoms[1] if bond.atoms[0].index == atom.index else bond.atoms[0]
             if _is_hydrogen(neighbor):
                 explicit_hs.append(neighbor)
             else:
