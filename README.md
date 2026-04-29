@@ -108,6 +108,11 @@ water_bridges_nw cluster \
 ### 2. Visualize
 
 ```bash
+# Clustered medoids — PyMOL
+water_bridges_nw visualize \
+  --data clustered_pathways.json --format pymol --mode cluster \
+  --output cluster_medoids.py
+
 # Density overlay across all frames — PyMOL
 water_bridges_nw visualize \
   --data results.jsonl --format pymol --mode density \
@@ -128,7 +133,7 @@ water_bridges_nw visualize \
 |---|---|
 | `--data` | `.jsonl` file produced by `calculate`. |
 | `--format` | `vmd`, `pymol`, or `chimera`. |
-| `--mode` | `density` (all frames overlaid) or `frame` (single frame). |
+| `--mode` | `density` (all frames overlaid), `frame` (single frame), or `cluster` (clustered medoids). |
 | `--frame` | Frame index to visualize; required when `--mode frame`. |
 | `--output` | Output script filename or prefix (default: `pathways_viz`). |
 
