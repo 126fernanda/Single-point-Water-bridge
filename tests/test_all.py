@@ -168,5 +168,24 @@ class TestVisualization(unittest.TestCase):
         finally:
             os.remove(temp_file.name)
 
+
+    @patch('water_bridges_nw.visualize.read_cluster_json')
+    @patch('water_bridges_nw.visualize.read_jsonl')
+    def test_export_vmd_cluster_script(self, mock_read_jsonl, mock_read_cluster_json):
+        mock_read_cluster_json.return_value = [
+            {"cluster_id": 0, "size": 10, "medoid_coords": [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]}
+        ]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".tcl") as f:
+            temp_name = f.name
+
+        export_vmd_script("dummy.json", output_file=temp_name, mode="cluster")
+
+        with open(temp_name, 'r') as f:
+            content = f.read()
+            self.assertIn("graphics top cylinder {0.000 0.000 0.000}", content)
+            self.assertIn("graphics top color orange", content)
+
+        os.remove(temp_name)
+
 if __name__ == '__main__':
     unittest.main()
