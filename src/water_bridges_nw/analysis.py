@@ -9,21 +9,23 @@ from .core import build_graph, compute_edge_probabilities, traverse_network
 
 logger = logging.getLogger(__name__)
 
-def cluster_pathways(data_file, threshold=3.5, output_file="clustered_pathways.json"):
+def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=30000, output_file="clustered_pathways.json"):
     """
-    Reads JSONL trajectory data and performs temporal clustering to identify collective pathways.
+    Reads JSONL trajectory data and performs temporal clustering to identify collective pathways
+    using a Hybrid 9D-Vector representation and frequency pre-filtering.
     """
     logger.info("Starting temporal clustering of pathways...")
     import scipy.spatial.distance as ssd
     from scipy.cluster.hierarchy import linkage, fcluster
 
-    paths = []
+    unique_paths = {}
     total_frames = 0
     frame_set = set()
 
     # Read paths into memory for clustering
     with open(data_file, 'r') as f:
         for line in f:
+            if not line.strip(): continue
             obj = json.loads(line)
             if obj.get('type') == 'metadata':
                 total_frames = obj.get('n_frames_analyzed', 0)
@@ -31,41 +33,72 @@ def cluster_pathways(data_file, threshold=3.5, output_file="clustered_pathways.j
                 frame_idx = obj['frame_idx']
                 frame_set.add(frame_idx)
                 for p in obj['paths']:
-                    paths.append({
-                        'frame': frame_idx,
-                        'nodes': p['nodes'],
-                        'coords': np.array(p['coords']),
-                        'probability': p['probability'],
-                        'length': p['length']
-                    })
+                    nodes_tuple = tuple(p['nodes'])
+                    coords = np.array(p['coords'])
 
-    n_paths = len(paths)
+                    # 9D vector: start, midpoint, end
+                    vec_9d = np.concatenate([coords[0], coords[len(coords)//2], coords[-1]])
+
+                    if nodes_tuple not in unique_paths:
+                        unique_paths[nodes_tuple] = {
+                            'frames': set(),
+                            'probs': [],
+                            '9d_vectors': [],
+                            'coords': coords.tolist() # Keep one full sequence for medoid
+                        }
+
+                    unique_paths[nodes_tuple]['frames'].add(frame_idx)
+                    unique_paths[nodes_tuple]['probs'].append(p['probability'])
+                    unique_paths[nodes_tuple]['9d_vectors'].append(vec_9d)
+
     if total_frames == 0:
         total_frames = len(frame_set)
 
-    if n_paths == 0:
+    if not unique_paths:
         logger.info("No paths found to cluster.")
         return
 
-    if n_paths == 1:
-        logger.info("Only 1 path found. Skipping clustering.")
+    # Pre-filter
+    filtered_paths = []
+    for nodes, data in unique_paths.items():
+        if len(data['frames']) >= min_frame_count:
+            # calculate time-averaged 9D vector
+            avg_9d = np.mean(data['9d_vectors'], axis=0)
+            avg_prob = np.mean(data['probs'])
+            filtered_paths.append({
+                'nodes': nodes,
+                'frames': data['frames'],
+                'occupancy': len(data['frames']) / total_frames if total_frames > 0 else 0.0,
+                'avg_prob': avg_prob,
+                'avg_9d': avg_9d,
+                'coords': data['coords']
+            })
+
+    n_filtered = len(filtered_paths)
+    logger.info(f"Filtered to {n_filtered} unique pathways appearing in >= {min_frame_count} frames.")
+
+    if n_filtered == 0:
+        logger.info("No paths remained after frequency pre-filtering.")
         return
 
-    logger.info(f"Computing pairwise directed Hausdorff distance matrix for {n_paths} pathways...")
+    # Memory Safety Cap
+    if n_filtered > max_paths:
+        logger.warning(f"Number of paths ({n_filtered}) exceeds maximum cap ({max_paths}). "
+                       f"Truncating to top {max_paths} most frequent paths to prevent memory crash.")
+        filtered_paths.sort(key=lambda x: x['occupancy'], reverse=True)
+        filtered_paths = filtered_paths[:max_paths]
+        n_filtered = len(filtered_paths)
 
-    # Compute condensed distance matrix
-    # Note: directed_hausdorff returns (dist, index1, index2). We just need the distance.
-    # Because lengths differ, Hausdorff is robust. We use the max of the two directed distances to make it symmetric.
-    dist_matrix = np.zeros(n_paths * (n_paths - 1) // 2)
-    idx = 0
-    for i in range(n_paths):
-        for j in range(i + 1, n_paths):
-            u_coords = paths[i]['coords']
-            v_coords = paths[j]['coords']
-            d1 = ssd.directed_hausdorff(u_coords, v_coords)[0]
-            d2 = ssd.directed_hausdorff(v_coords, u_coords)[0]
-            dist_matrix[idx] = max(d1, d2)
-            idx += 1
+    if n_filtered == 1:
+        logger.info("Only 1 path remaining. Skipping clustering.")
+        return
+
+    logger.info(f"Computing Euclidean distance matrix for {n_filtered} unique 9D pathways...")
+
+    # Extract 9D vectors into (N, 9) array
+    feature_matrix = np.array([p['avg_9d'] for p in filtered_paths])
+
+    dist_matrix = ssd.pdist(feature_matrix, metric='euclidean')
 
     logger.info("Performing hierarchical average-link clustering...")
     Z = linkage(dist_matrix, method='average')
@@ -79,32 +112,26 @@ def cluster_pathways(data_file, threshold=3.5, output_file="clustered_pathways.j
 
     for label in unique_labels:
         cluster_indices = np.where(labels == label)[0]
-        cluster_paths = [paths[i] for i in cluster_indices]
+        cluster_paths = [filtered_paths[i] for i in cluster_indices]
 
         # Calculate cluster occupancy
-        cluster_frames = set(p['frame'] for p in cluster_paths)
+        cluster_frames = set()
+        for p in cluster_paths:
+            cluster_frames.update(p['frames'])
         occupancy = len(cluster_frames) / total_frames if total_frames > 0 else 0.0
 
-        # Calculate average probability
-        avg_prob = np.mean([p['probability'] for p in cluster_paths])
+        # Calculate average probability across all paths in the cluster
+        avg_prob = np.mean([p['avg_prob'] for p in cluster_paths])
 
-        # Find the medoid (path with minimum average distance to all other paths in cluster)
-        # For simplicity and speed if cluster is large, we can just pick the first one, or do a small inner loop
-        if len(cluster_indices) <= 2:
-            medoid_coords = cluster_paths[0]['coords'].tolist()
-        else:
-            min_dist_sum = float('inf')
-            medoid_idx = 0
-            for i, p1 in enumerate(cluster_paths):
-                dist_sum = 0
-                for p2 in cluster_paths:
-                    d1 = ssd.directed_hausdorff(p1['coords'], p2['coords'])[0]
-                    d2 = ssd.directed_hausdorff(p2['coords'], p1['coords'])[0]
-                    dist_sum += max(d1, d2)
-                if dist_sum < min_dist_sum:
-                    min_dist_sum = dist_sum
-                    medoid_idx = i
-            medoid_coords = cluster_paths[medoid_idx]['coords'].tolist()
+        # Medoid calculation
+        # Find the path whose 9D vector has the minimum Euclidean distance to the cluster's mean 9D vector
+        cluster_features = np.array([p['avg_9d'] for p in cluster_paths])
+        mean_9d = np.mean(cluster_features, axis=0)
+
+        # Distances from each path's 9D vector to the mean 9D vector
+        distances_to_mean = np.linalg.norm(cluster_features - mean_9d, axis=1)
+        medoid_idx = np.argmin(distances_to_mean)
+        medoid_coords = cluster_paths[medoid_idx]['coords']
 
         clusters_data.append({
             "cluster_id": int(label),
