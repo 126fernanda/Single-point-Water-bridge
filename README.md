@@ -28,15 +28,20 @@ bridge pathways and their temporal occupancy across simulation frames.
   frame-count occupancy.
 
 - **Pathway clustering:** Optional post-processing groups spatially similar
-  paths across frames using directed Hausdorff distance and average-link
-  hierarchical clustering, producing a `clustered_pathways.json` file with
-  cluster size, occupancy, average probability, and a representative
-  medoid geometry.
+  paths across frames using a memory-efficient Hybrid 9D-Vector representation
+  (start, midpoint, and end coordinates) and Euclidean average-link
+  hierarchical clustering. It includes frame frequency pre-filtering and a
+  hard safety cap to prevent RAM exhaustion. This produces a `clustered_pathways.json`
+  file with cluster size, occupancy, average probability, and a representative
+  full-coordinate medoid geometry.
 
-- **Two-phase execution:**
+- **Multi-phase execution:**
   - **Phase 1 — `calculate`:** Processes trajectory frames via MDAnalysis
     and NetworkX. Streams output as JSON Lines (`.jsonl`) and optional `.csv`
     to avoid RAM exhaustion on long trajectories.
+  - **Phase 1.5 — `cluster`:** Post-processes `.jsonl` outputs separating
+    geometric calculation and analytical clustering to preserve memory while extracting
+    high-level collective behaviours.
   - **Phase 2 — `visualize`:** Parses `.jsonl` output and generates
     ready-to-run scripts for PyMOL (CGO cylinders), VMD (Tcl atom
     index selection), and UCSF Chimera (`.py` / `.bild`).
@@ -183,9 +188,9 @@ If persistence matters for your analysis, filter the `top_paths` output
 manually or apply the `--cluster` option, which groups paths by spatial
 similarity and reports per-cluster occupancy.
 
-**Very large path counts.** The clustering step computes a full
-pairwise Hausdorff distance matrix, which scales as O(N²) in the
-number of paths. For long trajectories with a high branching factor,
-the clustering step can become slow or memory-intensive. Use
+**Very large path counts.** The clustering step uses a hard maximum cap (`max_paths=30000`)
+and requires paths to appear in at least a minimum number of frames (`min_frame_count=2`)
+to prevent memory bottlenecks. For long trajectories with extreme branching,
+the clustering step may truncate the least frequent paths. Use
 `--stride` to reduce frame count or increase `--min_depth` to
 reduce the number of short paths before enabling `--cluster`.
