@@ -35,7 +35,7 @@ def main():
 
     # --cluster / --cluster_threshold are kept for backward compatibility but are deprecated in favour of the dedicated 'cluster' sub-command below.
     calc_parser.add_argument("--cluster", action="store_true", help="Enable temporal clustering of pathways post-analysis.")
-    calc_parser.add_argument("--cluster_threshold", type=float, default=3.5, help="Spatial threshold for for the deprecated inline clustering.")
+    calc_parser.add_argument("--cluster_threshold", type=float, default=3.5, help="Spatial threshold for the deprecated inline clustering.")
     
     # cluster sub-command  (NEW – decoupled from 'calculate')
     cluster_parser = subparsers.add_parser("cluster", help="Cluster pathways from a finished calculation without re-running the MD analysis.",)
