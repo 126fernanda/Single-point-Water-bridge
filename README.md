@@ -73,8 +73,6 @@ water_bridges_nw calculate \
   --coarse_cutoff 4.5 \
   --output results.jsonl \
   --csv   summary.csv \
-  --cluster \
-  --cluster_threshold 3.5
 ```
 
 | Option | Default | Description |
@@ -89,8 +87,6 @@ water_bridges_nw calculate \
 | `--coarse_cutoff` | `4.5` | Distance cutoff in Å for initial neighbour graph construction. |
 | `--output` | `results.jsonl` | Output file for full frame-by-frame path data (JSON Lines format). |
 | `--csv` | — | Optional human-readable CSV summary of detected paths. |
-| `--cluster` | off | (Deprecated) Enable inline spatial clustering. |
-| `--cluster_threshold` | `3.5` | (Deprecated) Distance threshold in Å for inline clustering. |
 
 
 ### 1.5. Cluster
