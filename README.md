@@ -93,7 +93,7 @@ water_bridges_nw calculate \
 | `--cluster_threshold` | `3.5` | (Deprecated) Distance threshold in Å for inline clustering. |
 
 
-### 2. Cluster
+### 1.5. Cluster
 
 ```bash
 # Cluster output pathways into collective behaviour groups
@@ -109,7 +109,7 @@ water_bridges_nw cluster \
 | `--threshold` | `6.0` | 9D Feature Vector distance threshold in Å for clustering. |
 | `--output` | `clustered_pathways.json` | Output JSON file for the cluster summary. |
 
-### 3. Visualize
+### 2. Visualize
 
 ```bash
 # Density overlay across all frames — PyMOL
