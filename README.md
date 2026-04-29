@@ -89,11 +89,27 @@ water_bridges_nw calculate \
 | `--coarse_cutoff` | `4.5` | Distance cutoff in Å for initial neighbour graph construction. |
 | `--output` | `results.jsonl` | Output file for full frame-by-frame path data (JSON Lines format). |
 | `--csv` | — | Optional human-readable CSV summary of detected paths. |
-| `--cluster` | off | Enable post-analysis spatial clustering of paths. Writes `clustered_pathways.json`. |
-| `--cluster_threshold` | `3.5` | Hausdorff distance threshold in Å for clustering. |
+| `--cluster` | off | (Deprecated) Enable inline spatial clustering. |
+| `--cluster_threshold` | `3.5` | (Deprecated) Distance threshold in Å for inline clustering. |
 
 
-### 2. Visualize
+### 2. Cluster
+
+```bash
+# Cluster output pathways into collective behaviour groups
+water_bridges_nw cluster \
+  --data results.jsonl \
+  --threshold 6.0 \
+  --output clustered_pathways.json
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--data` | required | The `.jsonl` file produced by `calculate`. |
+| `--threshold` | `6.0` | 9D Feature Vector distance threshold in Å for clustering. |
+| `--output` | `clustered_pathways.json` | Output JSON file for the cluster summary. |
+
+### 3. Visualize
 
 ```bash
 # Density overlay across all frames — PyMOL
