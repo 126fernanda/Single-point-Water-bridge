@@ -4,7 +4,6 @@ import os
 
 logger = logging.getLogger(__name__)
 
-
 def read_cluster_json(data_file):
     with open(data_file, 'r') as f:
         return json.load(f)
@@ -12,15 +11,15 @@ def read_cluster_json(data_file):
 def read_jsonl(data_file):
     frames = {}
     with open(data_file, 'r') as f:
-            for line in f:
-                if not line.strip():
-                    continue
-                obj = json.loads(line)
-                if obj.get('type') == 'frame':
-                    f_idx = str(obj['frame_idx'])
-                    if f_idx not in frames:
-                        frames[f_idx] = []
-                    frames[f_idx].extend(obj['paths'])
+        for line in f:
+            if not line.strip():
+                continue
+            obj = json.loads(line)
+            if obj.get('type') == 'frame':
+                f_idx = str(obj['frame_idx'])
+                if f_idx not in frames:
+                    frames[f_idx] = []
+                frames[f_idx].extend(obj['paths'])
     return frames
 
 def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", frame_idx=None):
@@ -64,14 +63,6 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
         logger.info(f"VMD script written to {output_file} for frame {frame_idx}")
 
     elif mode == "density":
-        # Draw all paths across all frames with low opacity to show density
-        # VMD density is best done by drawing static geometry if it spans frames,
-        # because a single selection only applies to one frame or all frames at their current coord.
-        # But per the instructions, we should rewrite export_vmd_script to generate dynamic representations.
-        # However, density across frames in VMD is inherently static if viewed simultaneously.
-        # Let's write the static cylinders for density, or if instructed to completely replace:
-        # We will write static cylinders for density, as it's the only way to visualize *all* frames overlaid.
-
         with open(output_file, 'w') as f:
             f.write("graphics top delete all\n")
             f.write("material change opacity Ghost 0.1\n")
@@ -106,11 +97,11 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
                     f.write(f"graphics top cylinder {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} {{{p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f}}} radius 0.2\n")
                     f.write(f"graphics top sphere {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} radius 0.3\n")
                 
+                # write the last sphere
                 p_last = coords[-1]
                 f.write(f"graphics top sphere {{{p_last[0]:.3f} {p_last[1]:.3f} {p_last[2]:.3f}}} radius 0.3\n")
 
         logger.info(f"VMD cluster script written to {output_file}")
-
 
 
 def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None):
@@ -162,7 +153,7 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
                         write_cylinder(coords[i], coords[i+1], radius=0.05, color=[0.0, 0.8, 0.8])
             logger.info(f"PyMOL density script written to {output_file}")
             
-    elif mode == "cluster":
+        elif mode == "cluster":
             clusters = read_cluster_json(data_file)
             for cluster in clusters:
                 coords = cluster.get("medoid_coords", [])
@@ -253,6 +244,7 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
                     bild_f.write(f".cylinder {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} {p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f} 0.2\n")
                     bild_f.write(f".sphere {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} 0.3\n")
 
+                # write the last sphere
                 p_last = coords[-1]
                 bild_f.write(f".sphere {p_last[0]:.3f} {p_last[1]:.3f} {p_last[2]:.3f} 0.3\n")
 
