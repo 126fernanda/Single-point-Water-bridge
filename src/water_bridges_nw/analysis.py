@@ -9,7 +9,7 @@ from .core import build_graph, compute_edge_probabilities, traverse_network
 
 logger = logging.getLogger(__name__)
 
-def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=30000, output_file="clustered_pathways.json"):
+def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=30000, output_file="clustered_pathways.json"):
     """
     Reads JSONL trajectory data and performs temporal clustering to identify collective pathways
     using a Hybrid 9D-Vector representation and frequency pre-filtering.
@@ -17,6 +17,7 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
     logger.info("Starting temporal clustering of pathways...")
     import scipy.spatial.distance as ssd
     from scipy.cluster.hierarchy import linkage, fcluster
+    import similaritymeasures
 
     unique_paths = {}
     total_frames = 0
@@ -36,20 +37,15 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
                     nodes_tuple = tuple(p['nodes'])
                     coords = np.array(p['coords'])
 
-                    # 9D vector: start, midpoint, end
-                    vec_9d = np.concatenate([coords[0], coords[len(coords)//2], coords[-1]])
-
                     if nodes_tuple not in unique_paths:
                         unique_paths[nodes_tuple] = {
                             'frames': set(),
                             'probs': [],
-                            '9d_vectors': [],
                             'coords': coords.tolist() # Keep one full sequence for medoid
                         }
 
                     unique_paths[nodes_tuple]['frames'].add(frame_idx)
                     unique_paths[nodes_tuple]['probs'].append(p['probability'])
-                    unique_paths[nodes_tuple]['9d_vectors'].append(vec_9d)
 
     if total_frames == 0:
         total_frames = len(frame_set)
@@ -64,15 +60,12 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
     filtered_paths = []
     for nodes, data in unique_paths.items():
         if len(data['frames']) >= min_frame_count:
-            # calculate time-averaged 9D vector
-            avg_9d = np.mean(data['9d_vectors'], axis=0)
             avg_prob = np.mean(data['probs'])
             filtered_paths.append({
                 'nodes': nodes,
                 'frames': data['frames'],
                 'occupancy': len(data['frames']) / total_frames if total_frames > 0 else 0.0,
                 'avg_prob': avg_prob,
-                'avg_9d': avg_9d,
                 'coords': data['coords']
             })
 
@@ -97,10 +90,7 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
         logger.info("Only 1 unique path remaining. Bypassing clustering and exporting directly.")
 
         frames_val = filtered_paths[0].get('frames', [-1])
-        if isinstance(frames_val, set):
-            medoid_frame = int(list(frames_val)[0])
-        else:
-            medoid_frame = int(frames_val[0])
+        medoid_frame = int(min(frames_val))
 
         clusters_data = [{
             "cluster_id": 1,
@@ -114,12 +104,29 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
             json.dump(clusters_data, f, indent=2)
         return
 
-    logger.info(f"Computing Euclidean distance matrix for {n_filtered} unique 9D pathways...")
+    logger.info(f"Computing Fréchet distance matrix for {n_filtered} unique pathways...")
 
-    # Extract 9D vectors into (N, 9) array
-    feature_matrix = np.array([p['avg_9d'] for p in filtered_paths])
+    # Pre-convert coordinates to a list of numpy arrays to avoid doing it O(N^2) times
+    all_coords = [np.array(p['coords']) for p in filtered_paths]
 
-    dist_matrix = ssd.pdist(feature_matrix, metric='euclidean')
+    n = len(all_coords)
+    condensed_dist = []
+    total_pairs = n * (n - 1) // 2
+    pairs_computed = 0
+    next_log_threshold = 0.10 # 10%
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            dist = similaritymeasures.frechet_dist(all_coords[i], all_coords[j])
+            condensed_dist.append(dist)
+            pairs_computed += 1
+
+            progress = pairs_computed / total_pairs
+            if progress >= next_log_threshold:
+                logger.info(f"Fréchet matrix calculation: {int(next_log_threshold * 100)}% complete...")
+                next_log_threshold += 0.10
+
+    dist_matrix = np.array(condensed_dist)
 
     logger.info("Performing hierarchical average-link clustering...")
     Z = linkage(dist_matrix, method='average')
@@ -128,6 +135,9 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
     unique_labels = set(labels)
     n_clusters = len(unique_labels)
     logger.info(f"Identified {n_clusters} unique collective pathways.")
+
+    # Pre-compute square distance matrix for fast medoid lookups
+    square_dist_matrix = ssd.squareform(dist_matrix)
 
     clusters_data = []
 
@@ -145,22 +155,19 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
         avg_prob = np.mean([p['avg_prob'] for p in cluster_paths])
 
         # Medoid calculation
-        # Find the path whose 9D vector has the minimum Euclidean distance to the cluster's mean 9D vector
-        cluster_features = np.array([p['avg_9d'] for p in cluster_paths])
-        mean_9d = np.mean(cluster_features, axis=0)
+        # Extract the sub-matrix of distances between elements in this cluster
+        cluster_dist_submatrix = square_dist_matrix[np.ix_(cluster_indices, cluster_indices)]
 
-        # Distances from each path's 9D vector to the mean 9D vector
-        distances_to_mean = np.linalg.norm(cluster_features - mean_9d, axis=1)
-        medoid_idx = np.argmin(distances_to_mean)
-        medoid_coords = cluster_paths[medoid_idx]['coords']
+        # Sum distances for each path to all other paths in the cluster
+        sum_distances = np.sum(cluster_dist_submatrix, axis=1)
 
-        medoid_path = cluster_paths[medoid_idx]
+        # The medoid is the path with the minimum sum of distances
+        medoid_local_idx = np.argmin(sum_distances)
+        medoid_path = cluster_paths[medoid_local_idx]
+        medoid_coords = medoid_path['coords']
 
         frames_val = medoid_path.get('frames', [-1])
-        if isinstance(frames_val, set):
-            medoid_frame = int(list(frames_val)[0])
-        else:
-            medoid_frame = int(frames_val[0])
+        medoid_frame = int(min(frames_val))
 
         clusters_data.append({
             "cluster_id": int(label),
