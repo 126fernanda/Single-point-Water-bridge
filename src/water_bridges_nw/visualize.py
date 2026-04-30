@@ -235,6 +235,8 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
             bild_f.write('.color orange\n')
 
             for cluster in clusters:
+                medoid_frame = cluster.get("medoid_frame", "Unknown")
+                bild_f.write(f".comment Medoid extracted from Frame {medoid_frame}\n")
                 coords = cluster.get("medoid_coords", [])
                 if len(coords) < 2:
                     continue
@@ -251,6 +253,8 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
         with open(output_file, 'w') as f:
             f.write("from chimera import runCommand, openModels\n")
             f.write(f"runCommand(\"open '{bild_file}'\")\n")
+            f.write("print('WARNING: Linking BILD geometry to Model #0. Ensure your protein was the FIRST thing loaded.')\n")
+            f.write("runCommand('matrixset ~0 #last')\n")
         logger.info(f"Chimera cluster script written to {output_file} (BILD geometry: {bild_file})")
 
 

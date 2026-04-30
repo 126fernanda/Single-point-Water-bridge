@@ -146,11 +146,20 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
         medoid_idx = np.argmin(distances_to_mean)
         medoid_coords = cluster_paths[medoid_idx]['coords']
 
+        medoid_path = cluster_paths[medoid_idx]
+
+        frames_val = medoid_path.get('frames', [-1])
+        if isinstance(frames_val, set):
+            medoid_frame = int(list(frames_val)[0])
+        else:
+            medoid_frame = int(frames_val[0])
+
         clusters_data.append({
             "cluster_id": int(label),
             "size": len(cluster_indices),
             "occupancy": float(occupancy),
             "avg_probability": float(avg_prob),
+            "medoid_frame": medoid_frame,
             "medoid_coords": medoid_coords
         })
 
