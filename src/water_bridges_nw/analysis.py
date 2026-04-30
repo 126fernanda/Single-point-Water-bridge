@@ -56,6 +56,8 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
 
     if not unique_paths:
         logger.info("No paths found to cluster.")
+        with open(output_file, 'w') as f:
+            json.dump([], f, indent=2)
         return
 
     # Pre-filter
@@ -79,6 +81,8 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
 
     if n_filtered == 0:
         logger.info("No paths remained after frequency pre-filtering.")
+        with open(output_file, 'w') as f:
+            json.dump([], f, indent=2)
         return
 
     # Memory Safety Cap
@@ -90,7 +94,16 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
         n_filtered = len(filtered_paths)
 
     if n_filtered == 1:
-        logger.info("Only 1 path remaining. Skipping clustering.")
+        logger.info("Only 1 unique path remaining. Bypassing clustering and exporting directly.")
+        clusters_data = [{
+            "cluster_id": 1,
+            "size": 1,
+            "occupancy": float(filtered_paths[0]['occupancy']),
+            "avg_probability": float(filtered_paths[0]['avg_prob']),
+            "medoid_coords": filtered_paths[0]['coords']
+        }]
+        with open(output_file, 'w') as f:
+            json.dump(clusters_data, f, indent=2)
         return
 
     logger.info(f"Computing Euclidean distance matrix for {n_filtered} unique 9D pathways...")
