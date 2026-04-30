@@ -95,11 +95,19 @@ def cluster_pathways(data_file, threshold=3.5, min_frame_count=2, max_paths=3000
 
     if n_filtered == 1:
         logger.info("Only 1 unique path remaining. Bypassing clustering and exporting directly.")
+
+        frames_val = filtered_paths[0].get('frames', [-1])
+        if isinstance(frames_val, set):
+            medoid_frame = int(list(frames_val)[0])
+        else:
+            medoid_frame = int(frames_val[0])
+
         clusters_data = [{
             "cluster_id": 1,
             "size": 1,
             "occupancy": float(filtered_paths[0]['occupancy']),
             "avg_probability": float(filtered_paths[0]['avg_prob']),
+            "medoid_frame": medoid_frame,
             "medoid_coords": filtered_paths[0]['coords']
         }]
         with open(output_file, 'w') as f:
