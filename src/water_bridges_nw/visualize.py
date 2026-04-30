@@ -27,8 +27,9 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
     """
     Generates a Tcl script to visualize the network in VMD using dynamic selections.
     """
-    frames = read_jsonl(data_file)
-
+    if mode in ["frame", "density"]:
+        frames = read_jsonl(data_file)
+        
     if mode == "frame":
         if frame_idx is None or str(frame_idx) not in frames:
             frame_idx = list(frames.keys())[0] if frames else None
@@ -86,6 +87,7 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
                         f.write(f"graphics top cylinder {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} {{{p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f}}} radius 0.1\n")
 
         logger.info(f"VMD density script written to {output_file}")
+        
     elif mode == "cluster":
         clusters = read_cluster_json(data_file)
         with open(output_file, 'w') as f:
@@ -103,7 +105,7 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
                     p2 = coords[i+1]
                     f.write(f"graphics top cylinder {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} {{{p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f}}} radius 0.2\n")
                     f.write(f"graphics top sphere {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} radius 0.3\n")
-                # write the last sphere
+                
                 p_last = coords[-1]
                 f.write(f"graphics top sphere {{{p_last[0]:.3f} {p_last[1]:.3f} {p_last[2]:.3f}}} radius 0.3\n")
 
@@ -115,7 +117,8 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
     """
     Generates a Python script to visualize the network in PyMOL as CGO.
     """
-    frames = read_jsonl(data_file)
+    if mode in ["frame", "density"]:
+        frames = read_jsonl(data_file)
 
     with open(output_file, 'w') as f:
         f.write("from pymol import cmd\n")
@@ -158,7 +161,8 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
                     for i in range(len(coords) - 1):
                         write_cylinder(coords[i], coords[i+1], radius=0.05, color=[0.0, 0.8, 0.8])
             logger.info(f"PyMOL density script written to {output_file}")
-        elif mode == "cluster":
+            
+    elif mode == "cluster":
             clusters = read_cluster_json(data_file)
             for cluster in clusters:
                 coords = cluster.get("medoid_coords", [])
@@ -170,16 +174,17 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
                 write_sphere(coords[-1], radius=0.3, color=[1.0, 0.5, 0.0])
             logger.info(f"PyMOL cluster script written to {output_file}")
 
-
         f.write("\ncmd.load_cgo(obj, 'water_network')\n")
         if mode == "density":
             f.write("cmd.set('cgo_transparency', 0.8, 'water_network')\n")
+
 
 def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None):
     """
     Generates a Python script to visualize the network in UCSF Chimera.
     """
-    frames = read_jsonl(data_file)
+    if mode in ["frame", "density"]:
+        frames = read_jsonl(data_file)
 
     if mode == "frame":
         if frame_idx is None or str(frame_idx) not in frames:
@@ -231,6 +236,7 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
             f.write("for m in new_models:\n")
             f.write("    runCommand('transparency 50 models #{}'.format(m.id))\n")
         logger.info(f"Chimera density script written to {output_file} (BILD geometry: {bild_file})")
+        
     elif mode == "cluster":
         clusters = read_cluster_json(data_file)
         bild_file = os.path.abspath(output_file.replace('.py', '.bild'))
@@ -247,7 +253,6 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
                     bild_f.write(f".cylinder {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} {p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f} 0.2\n")
                     bild_f.write(f".sphere {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} 0.3\n")
 
-                # write the last sphere
                 p_last = coords[-1]
                 bild_f.write(f".sphere {p_last[0]:.3f} {p_last[1]:.3f} {p_last[2]:.3f} 0.3\n")
 
