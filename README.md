@@ -108,10 +108,18 @@ water_bridges_nw cluster \
 ### 2. Visualize
 
 ```bash
-# Clustered medoids — PyMOL
+# Clustered medoids (supports vmd, pymol, chimera)
+water_bridges_nw visualize \
+  --data clustered_pathways.json --format vmd --mode cluster \
+  --output cluster_medoids.tcl
+
 water_bridges_nw visualize \
   --data clustered_pathways.json --format pymol --mode cluster \
   --output cluster_medoids.py
+
+water_bridges_nw visualize \
+  --data clustered_pathways.json --format chimera --mode cluster \
+  --output cluster_medoids_chimera.py
 
 # Density overlay across all frames — PyMOL
 water_bridges_nw visualize \
