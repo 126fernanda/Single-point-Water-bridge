@@ -2,6 +2,7 @@ import json
 import logging
 import csv
 import sys
+import copy
 import MDAnalysis as mda
 import numpy as np
 
@@ -134,11 +135,13 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
             cluster_indices = np.where(labels_9d == label)[0]
             cluster_paths = [filtered_paths[i] for i in cluster_indices]
 
-            # Sort paths in this coarse cluster by occupancy (descending)
-            cluster_paths.sort(key=lambda x: x['occupancy'], reverse=True)
-
             # Select representative
-            rep_path = cluster_paths[0]
+            cluster_features = np.array([p['avg_9d'] for p in cluster_paths])
+            mean_9d = np.mean(cluster_features, axis=0)
+            dists_to_mean = np.linalg.norm(cluster_features - mean_9d, axis=1)
+            medoid_local_idx = np.argmin(dists_to_mean)
+
+            rep_path = copy.deepcopy(cluster_paths[medoid_local_idx])
 
             # Merge frames and probabilities from all paths in this coarse cluster
             merged_frames = set()
