@@ -9,6 +9,30 @@ from .core import build_graph, compute_edge_probabilities, traverse_network
 
 logger = logging.getLogger(__name__)
 
+def compute_persistence(frame_indices_sorted, total_frames, stride):
+    """
+    Calculates the mean and maximum continuous run-lengths of frames.
+    """
+    if not frame_indices_sorted:
+        return 0.0, 0
+
+    run_lengths = []
+    current_run = 1
+
+    for i in range(1, len(frame_indices_sorted)):
+        if frame_indices_sorted[i] - frame_indices_sorted[i-1] == stride:
+            current_run += 1
+        else:
+            run_lengths.append(current_run)
+            current_run = 1
+
+    run_lengths.append(current_run)
+
+    mean_persistence = float(np.mean(run_lengths)) if run_lengths else 0.0
+    max_persistence = int(np.max(run_lengths)) if run_lengths else 0
+
+    return mean_persistence, max_persistence
+
 def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=30000, output_file="clustered_pathways.json"):
     """
     Reads JSONL trajectory data and performs temporal clustering to identify collective pathways
@@ -21,6 +45,7 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
 
     unique_paths = {}
     total_frames = 0
+    stride = 1
     frame_set = set()
 
     # Read paths into memory for clustering
@@ -30,6 +55,7 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
             obj = json.loads(line)
             if obj.get('type') == 'metadata':
                 total_frames = obj.get('n_frames_analyzed', 0)
+                stride = obj.get('parameters', {}).get('stride', 1)
             elif obj.get('type') == 'frame':
                 frame_idx = obj['frame_idx']
                 frame_set.add(frame_idx)
@@ -134,12 +160,21 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
         frames_val = filtered_paths[0].get('frames', [-1])
         medoid_frame = int(min(frames_val))
 
+        # Calculate persistence
+        if frames_val and frames_val != [-1]:
+            sorted_frames = sorted(list(frames_val))
+            mean_pers, max_pers = compute_persistence(sorted_frames, total_frames, stride)
+        else:
+            mean_pers, max_pers = 0.0, 0
+
         clusters_data = [{
             "cluster_id": 1,
             "size": 1,
             "occupancy": float(filtered_paths[0]['occupancy']),
             "avg_probability": float(filtered_paths[0]['avg_prob']),
             "medoid_frame": medoid_frame,
+            "mean_persistence_frames": mean_pers,
+            "max_persistence_frames": max_pers,
             "medoid_coords": filtered_paths[0]['coords']
         }]
         with open(output_file, 'w') as f:
@@ -211,12 +246,21 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
         frames_val = medoid_path.get('frames', [-1])
         medoid_frame = int(min(frames_val))
 
+        # Calculate persistence
+        if cluster_frames and cluster_frames != [-1]:
+            sorted_frames = sorted(list(cluster_frames))
+            mean_pers, max_pers = compute_persistence(sorted_frames, total_frames, stride)
+        else:
+            mean_pers, max_pers = 0.0, 0
+
         clusters_data.append({
             "cluster_id": int(label),
             "size": len(cluster_indices),
             "occupancy": float(occupancy),
             "avg_probability": float(avg_prob),
             "medoid_frame": medoid_frame,
+            "mean_persistence_frames": mean_pers,
+            "max_persistence_frames": max_pers,
             "medoid_coords": medoid_coords
         })
 
