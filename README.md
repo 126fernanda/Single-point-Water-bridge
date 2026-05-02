@@ -28,12 +28,15 @@ bridge pathways and their temporal occupancy across simulation frames.
   frame-count occupancy.
 
 - **Pathway clustering:** Optional post-processing groups spatially similar
-  paths across frames using a memory-efficient Hybrid 9D-Vector representation
-  (start, midpoint, and end coordinates) and Euclidean average-link
-  hierarchical clustering. It includes frame frequency pre-filtering and a
-  hard safety cap to prevent RAM exhaustion. This produces a `clustered_pathways.json`
-  file with cluster size, occupancy, average probability, and a representative
-  full-coordinate medoid geometry.
+  paths across frames in a two-stage process: first, a memory-efficient 9D-Vector
+  coarse screening pass groups identical spatial channels. Then, a rigorous
+  average-link hierarchical clustering using the Fréchet distance metric on full
+  3D coordinates determines the final topological groups. It includes frame
+  frequency pre-filtering, a hard safety cap to prevent RAM exhaustion, and
+  correct geometric medoid selection to avoid occupancy bias. This produces a
+  `clustered_pathways.json` file with cluster size, occupancy, average probability,
+  persistence statistics (`mean_persistence_frames` and `max_persistence_frames`
+  accounting for stride), and a representative full-coordinate medoid geometry.
 
 - **Multi-phase execution:**
   - **Phase 1 — `calculate`:** Processes trajectory frames via MDAnalysis
@@ -102,7 +105,8 @@ water_bridges_nw cluster \
 | Option | Default | Description |
 |---|---|---|
 | `--data` | required | The `.jsonl` file produced by `calculate`. |
-| `--threshold` | `6.0` | 9D Feature Vector distance threshold in Å for clustering. |
+| `--threshold` | `6.0` | Fréchet distance threshold in Å for fine clustering. |
+| `--coarse_threshold` | `threshold / sqrt(3)` | 9D Feature Vector distance threshold in Å for the coarse screening pass. |
 | `--output` | `clustered_pathways.json` | Output JSON file for the cluster summary. |
 
 ### 2. Visualize
