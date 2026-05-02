@@ -9,6 +9,30 @@ from .core import build_graph, compute_edge_probabilities, traverse_network
 
 logger = logging.getLogger(__name__)
 
+def compute_persistence(frame_indices_sorted, total_frames, stride):
+    """
+    Calculates the mean and maximum continuous run-lengths of frames.
+    """
+    if not frame_indices_sorted:
+        return 0.0, 0
+
+    run_lengths = []
+    current_run = 1
+
+    for i in range(1, len(frame_indices_sorted)):
+        if frame_indices_sorted[i] - frame_indices_sorted[i-1] == stride:
+            current_run += 1
+        else:
+            run_lengths.append(current_run)
+            current_run = 1
+
+    run_lengths.append(current_run)
+
+    mean_persistence = float(np.mean(run_lengths)) if run_lengths else 0.0
+    max_persistence = int(np.max(run_lengths)) if run_lengths else 0
+
+    return mean_persistence, max_persistence
+
 def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=30000, output_file="clustered_pathways.json"):
     """
     Reads JSONL trajectory data and performs temporal clustering to identify collective pathways
@@ -21,6 +45,7 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
 
     unique_paths = {}
     total_frames = 0
+    stride = 1
     frame_set = set()
 
     # Read paths into memory for clustering
@@ -30,6 +55,7 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
             obj = json.loads(line)
             if obj.get('type') == 'metadata':
                 total_frames = obj.get('n_frames_analyzed', 0)
+                stride = obj.get('parameters', {}).get('stride', 1)
             elif obj.get('type') == 'frame':
                 frame_idx = obj['frame_idx']
                 frame_set.add(frame_idx)
@@ -41,11 +67,15 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
                         unique_paths[nodes_tuple] = {
                             'frames': set(),
                             'probs': [],
-                            'coords': coords.tolist() # Keep one full sequence for medoid
+                            'coords': coords.tolist(), # Keep one full sequence for medoid
+                            '9d_vectors': []
                         }
 
                     unique_paths[nodes_tuple]['frames'].add(frame_idx)
                     unique_paths[nodes_tuple]['probs'].append(p['probability'])
+
+                    vector_9d = np.concatenate([coords[0], coords[len(coords)//2], coords[-1]])
+                    unique_paths[nodes_tuple]['9d_vectors'].append(vector_9d)
 
     if total_frames == 0:
         total_frames = len(frame_set)
@@ -61,12 +91,14 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
     for nodes, data in unique_paths.items():
         if len(data['frames']) >= min_frame_count:
             avg_prob = np.mean(data['probs'])
+            avg_9d = np.mean(data['9d_vectors'], axis=0)
             filtered_paths.append({
                 'nodes': nodes,
                 'frames': data['frames'],
                 'occupancy': len(data['frames']) / total_frames if total_frames > 0 else 0.0,
                 'avg_prob': avg_prob,
-                'coords': data['coords']
+                'coords': data['coords'],
+                'avg_9d': avg_9d
             })
 
     n_filtered = len(filtered_paths)
@@ -86,11 +118,54 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
         filtered_paths = filtered_paths[:max_paths]
         n_filtered = len(filtered_paths)
 
+    if n_filtered > 1:
+        # 9D Coarse Screening Pass
+        logger.info("Performing coarse 9D screening pass...")
+        all_9d = np.array([p['avg_9d'] for p in filtered_paths])
+        dist_matrix_9d = ssd.pdist(all_9d, metric='euclidean')
+        Z_9d = linkage(dist_matrix_9d, method='average')
+        labels_9d = fcluster(Z_9d, t=threshold, criterion='distance')
+
+        unique_labels_9d = set(labels_9d)
+        logger.info(f"Coarse 9D screening reduced {n_filtered} paths to {len(unique_labels_9d)} spatial channels.")
+
+        coarse_screened_paths = []
+        for label in unique_labels_9d:
+            cluster_indices = np.where(labels_9d == label)[0]
+            cluster_paths = [filtered_paths[i] for i in cluster_indices]
+
+            # Sort paths in this coarse cluster by occupancy (descending)
+            cluster_paths.sort(key=lambda x: x['occupancy'], reverse=True)
+
+            # Select representative
+            rep_path = cluster_paths[0]
+
+            # Merge frames and probabilities from all paths in this coarse cluster
+            merged_frames = set()
+            for p in cluster_paths:
+                merged_frames.update(p['frames'])
+
+            rep_path['frames'] = merged_frames
+            rep_path['occupancy'] = len(merged_frames) / total_frames if total_frames > 0 else 0.0
+            rep_path['avg_prob'] = np.mean([p['avg_prob'] for p in cluster_paths])
+
+            coarse_screened_paths.append(rep_path)
+
+        filtered_paths = coarse_screened_paths
+        n_filtered = len(filtered_paths)
+
     if n_filtered == 1:
         logger.info("Only 1 unique path remaining. Bypassing clustering and exporting directly.")
 
         frames_val = filtered_paths[0].get('frames', [-1])
         medoid_frame = int(min(frames_val))
+
+        # Calculate persistence
+        if frames_val and frames_val != [-1]:
+            sorted_frames = sorted(list(frames_val))
+            mean_pers, max_pers = compute_persistence(sorted_frames, total_frames, stride)
+        else:
+            mean_pers, max_pers = 0.0, 0
 
         clusters_data = [{
             "cluster_id": 1,
@@ -98,6 +173,8 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
             "occupancy": float(filtered_paths[0]['occupancy']),
             "avg_probability": float(filtered_paths[0]['avg_prob']),
             "medoid_frame": medoid_frame,
+            "mean_persistence_frames": mean_pers,
+            "max_persistence_frames": max_pers,
             "medoid_coords": filtered_paths[0]['coords']
         }]
         with open(output_file, 'w') as f:
@@ -145,6 +222,14 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
         cluster_indices = np.where(labels == label)[0]
         cluster_paths = [filtered_paths[i] for i in cluster_indices]
 
+        # Calculate length variance warning
+        path_lengths = [len(p['nodes']) for p in cluster_paths]
+        if np.std(path_lengths) > 2.0:
+            logger.warning(
+                f"Cluster {label} exhibits high length variance (std > 2.0). "
+                "Fréchet distances for this cluster may be dominated by length discrepancies rather than topological shape differences."
+            )
+
         # Calculate cluster occupancy
         cluster_frames = set()
         for p in cluster_paths:
@@ -169,12 +254,21 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
         frames_val = medoid_path.get('frames', [-1])
         medoid_frame = int(min(frames_val))
 
+        # Calculate persistence
+        if cluster_frames and cluster_frames != [-1]:
+            sorted_frames = sorted(list(cluster_frames))
+            mean_pers, max_pers = compute_persistence(sorted_frames, total_frames, stride)
+        else:
+            mean_pers, max_pers = 0.0, 0
+
         clusters_data.append({
             "cluster_id": int(label),
             "size": len(cluster_indices),
             "occupancy": float(occupancy),
             "avg_probability": float(avg_prob),
             "medoid_frame": medoid_frame,
+            "mean_persistence_frames": mean_pers,
+            "max_persistence_frames": max_pers,
             "medoid_coords": medoid_coords
         })
 
