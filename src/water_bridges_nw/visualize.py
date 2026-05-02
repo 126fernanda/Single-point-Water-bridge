@@ -254,7 +254,10 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
             f.write("from chimera import runCommand, openModels\n")
             f.write(f"runCommand(\"open '{bild_file}'\")\n")
             f.write("print('Linking BILD geometry to Model #0 (ensure your protein is loaded first)')\n")
-            f.write("runCommand('matrixset ~0 #last')\n")
+            f.write("try:\n")
+            f.write("    runCommand('matrixset ~0 #last')\n")
+            f.write("except Exception as e:\n")
+            f.write("    print('Warning: Failed to link BILD geometry to Model #0. Ensure a protein structure is loaded first.')\n")
         logger.info(f"Chimera cluster script written to {output_file} (BILD geometry: {bild_file})")
 
 
