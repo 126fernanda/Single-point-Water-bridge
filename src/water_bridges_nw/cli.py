@@ -43,12 +43,13 @@ def main():
     cluster_parser.add_argument("--threshold", type=float, default=6.0,
         help="9D feature-vector distance threshold (Å) for average-link clustering. "
          "Lower values produce finer clusters. "
-         "This metric compares the start, midpoint, and end coordinates of each path "
-         "as a single 9-dimensional vector. Because it combines three 3D displacements, "
-         "its numerical scale is up to sqrt(3) ≈ 1.73x larger than a single-point "
-         "centroid distance. The default of 6.0 Å is approximately equivalent to the "
-         "original 3.5 Å Hausdorff threshold (3.5 * 1.73 ≈ 6.1). "
-         "Recommended range: 4.0–9.0 Å depending on system flexibility.")
+         "This metric computes the Fréchet distance between 3D path coordinates. "
+         "Recommended range: 3.0–8.0 Å depending on system flexibility.")
+    cluster_parser.add_argument("--coarse_threshold", type=float, default=None,
+        help="9D feature-vector distance threshold (Å) for the coarse screening pass. "
+         "Because it combines three 3D displacements, its numerical scale is up to "
+         "sqrt(3) ≈ 1.73x larger than the Fréchet threshold. By default, it is "
+         "calculated as threshold / sqrt(3).")
     cluster_parser.add_argument("--min_frame_count", type=int, default=2, 
         help="Minimum number of frames a path must appear in to be included in clustering. "
          "Increase this to filter out more transient paths and reduce memory usage.")
@@ -89,6 +90,7 @@ def main():
         cluster_pathways(
             data_file=args.data,
             threshold=args.threshold,
+            coarse_threshold=args.coarse_threshold,
             min_frame_count=args.min_frame_count,
             max_paths=args.max_paths,
             output_file=args.output,
