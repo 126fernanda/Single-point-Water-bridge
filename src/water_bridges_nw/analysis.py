@@ -41,11 +41,15 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
                         unique_paths[nodes_tuple] = {
                             'frames': set(),
                             'probs': [],
-                            'coords': coords.tolist() # Keep one full sequence for medoid
+                            'coords': coords.tolist(), # Keep one full sequence for medoid
+                            '9d_vectors': []
                         }
 
                     unique_paths[nodes_tuple]['frames'].add(frame_idx)
                     unique_paths[nodes_tuple]['probs'].append(p['probability'])
+
+                    vector_9d = np.concatenate([coords[0], coords[len(coords)//2], coords[-1]])
+                    unique_paths[nodes_tuple]['9d_vectors'].append(vector_9d)
 
     if total_frames == 0:
         total_frames = len(frame_set)
@@ -61,12 +65,14 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
     for nodes, data in unique_paths.items():
         if len(data['frames']) >= min_frame_count:
             avg_prob = np.mean(data['probs'])
+            avg_9d = np.mean(data['9d_vectors'], axis=0)
             filtered_paths.append({
                 'nodes': nodes,
                 'frames': data['frames'],
                 'occupancy': len(data['frames']) / total_frames if total_frames > 0 else 0.0,
                 'avg_prob': avg_prob,
-                'coords': data['coords']
+                'coords': data['coords'],
+                'avg_9d': avg_9d
             })
 
     n_filtered = len(filtered_paths)
@@ -84,6 +90,42 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
                        f"Truncating to top {max_paths} most frequent paths to prevent memory crash.")
         filtered_paths.sort(key=lambda x: x['occupancy'], reverse=True)
         filtered_paths = filtered_paths[:max_paths]
+        n_filtered = len(filtered_paths)
+
+    if n_filtered > 1:
+        # 9D Coarse Screening Pass
+        logger.info("Performing coarse 9D screening pass...")
+        all_9d = np.array([p['avg_9d'] for p in filtered_paths])
+        dist_matrix_9d = ssd.pdist(all_9d, metric='euclidean')
+        Z_9d = linkage(dist_matrix_9d, method='average')
+        labels_9d = fcluster(Z_9d, t=threshold, criterion='distance')
+
+        unique_labels_9d = set(labels_9d)
+        logger.info(f"Coarse 9D screening reduced {n_filtered} paths to {len(unique_labels_9d)} spatial channels.")
+
+        coarse_screened_paths = []
+        for label in unique_labels_9d:
+            cluster_indices = np.where(labels_9d == label)[0]
+            cluster_paths = [filtered_paths[i] for i in cluster_indices]
+
+            # Sort paths in this coarse cluster by occupancy (descending)
+            cluster_paths.sort(key=lambda x: x['occupancy'], reverse=True)
+
+            # Select representative
+            rep_path = cluster_paths[0]
+
+            # Merge frames and probabilities from all paths in this coarse cluster
+            merged_frames = set()
+            for p in cluster_paths:
+                merged_frames.update(p['frames'])
+
+            rep_path['frames'] = merged_frames
+            rep_path['occupancy'] = len(merged_frames) / total_frames if total_frames > 0 else 0.0
+            rep_path['avg_prob'] = np.mean([p['avg_prob'] for p in cluster_paths])
+
+            coarse_screened_paths.append(rep_path)
+
+        filtered_paths = coarse_screened_paths
         n_filtered = len(filtered_paths)
 
     if n_filtered == 1:
