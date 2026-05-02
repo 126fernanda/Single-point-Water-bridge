@@ -222,6 +222,14 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
         cluster_indices = np.where(labels == label)[0]
         cluster_paths = [filtered_paths[i] for i in cluster_indices]
 
+        # Calculate length variance warning
+        path_lengths = [len(p['nodes']) for p in cluster_paths]
+        if np.std(path_lengths) > 2.0:
+            logger.warning(
+                f"Cluster {label} exhibits high length variance (std > 2.0). "
+                "Fréchet distances for this cluster may be dominated by length discrepancies rather than topological shape differences."
+            )
+
         # Calculate cluster occupancy
         cluster_frames = set()
         for p in cluster_paths:
