@@ -135,9 +135,6 @@ def cluster_pathways(data_file, threshold=6.0, min_frame_count=2, max_paths=3000
             cluster_indices = np.where(labels_9d == label)[0]
             cluster_paths = [filtered_paths[i] for i in cluster_indices]
 
-            # Sort paths in this coarse cluster by occupancy (descending)
-            cluster_paths.sort(key=lambda x: x['occupancy'], reverse=True)
-
             # Select representative
             cluster_features = np.array([p['avg_9d'] for p in cluster_paths])
             mean_9d = np.mean(cluster_features, axis=0)
