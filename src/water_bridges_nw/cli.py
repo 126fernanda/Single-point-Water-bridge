@@ -45,6 +45,13 @@ def main():
          "Lower values produce finer clusters. "
          "This metric computes the Fréchet distance between 3D path coordinates. "
          "Recommended range: 3.0–8.0 Å depending on system flexibility.")
+    cluster_parser.add_argument("--coarse_trigger", type=int, default=1000,
+        help="Number of paths below which the 9D coarse screening pass is bypassed "
+             "and Fréchet distance is computed directly on all paths. "
+             "Below this threshold, the Fréchet computation is fast enough that "
+             "the coarse filter adds risk without benefit. "
+             "Default: 1000 (≈500,000 pairs, completes in seconds on a modern CPU). "
+             "Safe range: 500–2000 depending on available CPU time.")
     cluster_parser.add_argument("--coarse_threshold", type=float, default=None,
         help="9D feature-vector distance threshold (Å) for the coarse screening pass. "
          "Because it combines three 3D displacements, its numerical scale is up to "
@@ -91,6 +98,7 @@ def main():
             data_file=args.data,
             threshold=args.threshold,
             coarse_threshold=args.coarse_threshold,
+            coarse_trigger=args.coarse_trigger,
             min_frame_count=args.min_frame_count,
             max_paths=args.max_paths,
             output_file=args.output,
