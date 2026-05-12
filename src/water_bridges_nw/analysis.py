@@ -247,10 +247,26 @@ def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, coarse_tri
                 "Fréchet distances for this cluster may be dominated by length discrepancies rather than topological shape differences."
             )
 
-        # Calculate cluster occupancy
+        # Calculate cluster occupancy using the fully merged frame set.
+        # This is Pass 2 of the two-pass min_frame_count strategy.
+        # Pass 1 (the initial pre-filter) protects memory by removing raw
+        # single-frame noise. Pass 2 applies the same threshold here, after
+        # the coarse clustering has merged frames across geometrically similar
+        # paths, so that the check reflects true thermodynamic occupancy of
+        # the spatial channel rather than exact atom-sequence recurrence.
+        # Users running --min_frame_count 1 (solvent-exchange mode) rely on
+        # this pass to discard any merged clusters that still have low occupancy.
         cluster_frames = set()
         for p in cluster_paths:
             cluster_frames.update(p['frames'])
+
+        if len(cluster_frames) < min_frame_count:
+            logger.debug(
+                f"Cluster {label} discarded: merged occupancy "
+                f"({len(cluster_frames)} frames) < min_frame_count ({min_frame_count})."
+            )
+            continue
+
         occupancy = len(cluster_frames) / total_frames if total_frames > 0 else 0.0
 
         # Calculate average probability across all paths in the cluster
