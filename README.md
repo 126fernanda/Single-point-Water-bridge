@@ -106,6 +106,7 @@ water_bridges_nw cluster \
 |---|---|---|
 | `--data` | required | The `.jsonl` file produced by `calculate`. |
 | `--threshold` | `6.0` | Fréchet distance threshold in Å for fine clustering. |
+| `--coarse_trigger` | `1000` | Number of paths below which the 9D coarse filter is bypassed for direct Fréchet calculation. |
 | `--coarse_threshold` | `threshold / sqrt(3)` | 9D Feature Vector distance threshold in Å for the coarse screening pass. |
 | `--output` | `clustered_pathways.json` | Output JSON file for the cluster summary. |
 

@@ -34,10 +34,13 @@ def compute_persistence(frame_indices_sorted, total_frames, stride):
 
     return mean_persistence, max_persistence
 
-def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, min_frame_count=2, max_paths=30000, output_file="clustered_pathways.json"):
+def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, coarse_trigger=1000, min_frame_count=2, max_paths=30000, output_file="clustered_pathways.json"):
     """
     Reads JSONL trajectory data and performs temporal clustering to identify collective pathways
     using a Hybrid 9D-Vector representation and frequency pre-filtering.
+
+    Args:
+        coarse_trigger (int): Dataset size threshold. If the number of paths is less than or equal to this value, the 9D coarse screening is bypassed to maximize topological fidelity.
     """
     logger.info("Starting temporal clustering of pathways...")
     import scipy.spatial.distance as ssd
@@ -119,9 +122,9 @@ def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, min_frame_
         filtered_paths = filtered_paths[:max_paths]
         n_filtered = len(filtered_paths)
 
-    if n_filtered > 1:
+    if n_filtered > coarse_trigger:
         # 9D Coarse Screening Pass
-        logger.info("Performing coarse 9D screening pass...")
+        logger.info(f"Dataset large ({n_filtered} paths > trigger={coarse_trigger}). Performing coarse 9D screening pass...")
 
         if coarse_threshold is None:
             coarse_threshold = threshold / np.sqrt(3)
@@ -160,6 +163,13 @@ def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, min_frame_
 
         filtered_paths = coarse_screened_paths
         n_filtered = len(filtered_paths)
+
+    elif n_filtered > 1:
+        logger.info(
+            f"Dataset small ({n_filtered} paths ≤ trigger={coarse_trigger}). "
+            "Bypassing 9D coarse filter — proceeding directly to Fréchet distance "
+            "for maximum topological fidelity."
+        )
 
     if n_filtered == 1:
         logger.info("Only 1 unique path remaining. Bypassing clustering and exporting directly.")

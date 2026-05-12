@@ -187,5 +187,42 @@ class TestVisualization(unittest.TestCase):
 
         os.remove(temp_name)
 
+    @patch('water_bridges_nw.analysis.logger.info')
+    def test_cluster_coarse_trigger(self, mock_logger_info):
+        from water_bridges_nw.analysis import cluster_pathways
+
+        # Create a dummy jsonl file with 3 distinct paths
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jsonl", mode='w') as f_json:
+            json_name = f_json.name
+            f_json.write('{"type": "metadata", "n_frames_analyzed": 1}\n')
+            # Path 1
+            f_json.write('{"type": "frame", "frame_idx": 0, "paths": [{"nodes": [0, 1], "coords": [[0,0,0], [1,1,1]], "probability": 1.0}]}\n')
+            # Path 2
+            f_json.write('{"type": "frame", "frame_idx": 0, "paths": [{"nodes": [0, 2], "coords": [[0,0,0], [2,2,2]], "probability": 1.0}]}\n')
+            # Path 3
+            f_json.write('{"type": "frame", "frame_idx": 0, "paths": [{"nodes": [0, 3], "coords": [[0,0,0], [3,3,3]], "probability": 1.0}]}\n')
+
+        # Test bypass logic: coarse_trigger=5 (we have 3 paths, so 3 <= 5 -> bypass)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as f_out:
+            out_name = f_out.name
+
+        cluster_pathways(data_file=json_name, coarse_trigger=5, min_frame_count=1, output_file=out_name)
+
+        # Verify bypass message
+        bypass_msg_found = any("Dataset small" in call.args[0] and "Bypassing 9D coarse filter" in call.args[0] for call in mock_logger_info.call_args_list)
+        self.assertTrue(bypass_msg_found, "Expected bypass message for n_filtered <= coarse_trigger")
+
+        mock_logger_info.reset_mock()
+
+        # Test non-bypass logic: coarse_trigger=2 (we have 3 paths, so 3 > 2 -> run filter)
+        cluster_pathways(data_file=json_name, coarse_trigger=2, min_frame_count=1, output_file=out_name)
+
+        # Verify run message
+        run_msg_found = any("Dataset large" in call.args[0] and "Performing coarse 9D screening pass" in call.args[0] for call in mock_logger_info.call_args_list)
+        self.assertTrue(run_msg_found, "Expected run message for n_filtered > coarse_trigger")
+
+        os.remove(json_name)
+        os.remove(out_name)
+
 if __name__ == '__main__':
     unittest.main()
