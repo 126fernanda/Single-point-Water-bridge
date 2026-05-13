@@ -57,10 +57,7 @@ def main():
          "Because it combines three 3D displacements, its numerical scale is up to "
          "sqrt(3) ≈ 1.73x larger than the Fréchet threshold. By default, it is "
          "calculated as threshold / sqrt(3).")
-    cluster_parser.add_argument("--min_frame_count", type=int, default=2, 
-        help="Minimum number of frames a path must appear in to be included in clustering. "
-         "Increase this to filter out more transient paths and reduce memory usage.")
-    cluster_parser.add_argument("--max_paths", type=int, default=30000, help="Hard cap on number of paths sent to the distance matrix. "
+    cluster_parser.add_argument("--max_paths", type=int, default=60000, help="Hard cap on number of paths sent to the distance matrix. "
          "If exceeded, the top N paths by occupancy are used. "
          "Prevents out-of-memory crashes on large trajectories.")
     cluster_parser.add_argument("--output", default="clustered_pathways.json", help="Output JSON file for the cluster summary.")
@@ -71,6 +68,7 @@ def main():
     vis_parser.add_argument("--format", choices=["vmd", "pymol", "chimera"], default="vmd", help="Target visualization software.")
     vis_parser.add_argument("--mode", choices=["density", "frame", "cluster"], default="density", help="Visualization mode: 'density' (all frames), 'frame' (single frame), or 'cluster' (clustered medoids).")
     vis_parser.add_argument("--frame", type=int, default=None, help="Frame index to visualize (only used if mode='frame').")
+    vis_parser.add_argument("--cluster_id", type=int, default=None, help="Specific cluster ID to visualize (only used if mode='cluster'). If None, visualizes all clusters.")
     vis_parser.add_argument("--output", default="pathways_viz", help="Output script file name or prefix.")
 
     args = parser.parse_args()
@@ -99,7 +97,6 @@ def main():
             threshold=args.threshold,
             coarse_threshold=args.coarse_threshold,
             coarse_trigger=args.coarse_trigger,
-            min_frame_count=args.min_frame_count,
             max_paths=args.max_paths,
             output_file=args.output,
         )
@@ -110,6 +107,7 @@ def main():
             format=args.format,
             mode=args.mode,
             frame_idx=args.frame,
+            cluster_id=args.cluster_id,
             output_file=args.output
         )
 

@@ -22,7 +22,7 @@ def read_jsonl(data_file):
                 frames[f_idx].extend(obj['paths'])
     return frames
 
-def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", frame_idx=None):
+def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", frame_idx=None, cluster_id=None):
     """
     Generates a Tcl script to visualize the network in VMD using dynamic selections.
     """
@@ -57,6 +57,23 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
             f.write("mol addrep top\n")
             f.write("mol delrep 0 top\n")
 
+            # Append static graphics geometry for connected wires
+            f.write("\ngraphics top material Opaque\n")
+            f.write("graphics top color orange\n")
+            for path in paths:
+                coords = path["coords"]
+                if len(coords) < 2:
+                    continue
+                for i in range(len(coords) - 1):
+                    p1 = coords[i]
+                    p2 = coords[i+1]
+                    f.write(f"graphics top cylinder {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} {{{p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f}}} radius 0.2\n")
+                    f.write(f"graphics top sphere {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} radius 0.3\n")
+
+                # write the last sphere
+                p_last = coords[-1]
+                f.write(f"graphics top sphere {{{p_last[0]:.3f} {p_last[1]:.3f} {p_last[2]:.3f}}} radius 0.3\n")
+
             # Optional: Move to the frame
             f.write(f"animate goto {frame_idx}\n")
 
@@ -81,6 +98,12 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
         
     elif mode == "cluster":
         clusters = read_cluster_json(data_file)
+        if cluster_id is not None:
+            clusters = [c for c in clusters if c.get("cluster_id") == cluster_id]
+            if not clusters:
+                logger.warning(f"Cluster ID {cluster_id} not found in data.")
+                return
+
         with open(output_file, 'w') as f:
             f.write("graphics top delete all\n")
             f.write("material change opacity Opaque 1.0\n")
@@ -104,7 +127,7 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
         logger.info(f"VMD cluster script written to {output_file}")
 
 
-def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None):
+def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None, cluster_id=None):
     """
     Generates a Python script to visualize the network in PyMOL as CGO.
     """
@@ -155,6 +178,12 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
             
         elif mode == "cluster":
             clusters = read_cluster_json(data_file)
+            if cluster_id is not None:
+                clusters = [c for c in clusters if c.get("cluster_id") == cluster_id]
+                if not clusters:
+                    logger.warning(f"Cluster ID {cluster_id} not found in data.")
+                    return
+
             for cluster in clusters:
                 coords = cluster.get("medoid_coords", [])
                 if len(coords) < 2:
@@ -170,7 +199,7 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
             f.write("cmd.set('cgo_transparency', 0.8, 'water_network')\n")
 
 
-def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None):
+def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None, cluster_id=None):
     """
     Generates a Python script to visualize the network in UCSF Chimera.
     """
@@ -195,6 +224,23 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
             else:
                 all_ids.update(i+1 for i in path["nodes"])
 
+        bild_file = os.path.abspath(output_file.replace('.py', '.bild'))
+        with open(bild_file, 'w') as bild_f:
+            bild_f.write('.color orange\n')
+            for path in paths:
+                coords = path["coords"]
+                if len(coords) < 2:
+                    continue
+                for i in range(len(coords) - 1):
+                    p1 = coords[i]
+                    p2 = coords[i+1]
+                    bild_f.write(f".cylinder {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} {p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f} 0.2\n")
+                    bild_f.write(f".sphere {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} 0.3\n")
+
+                # write the last sphere
+                p_last = coords[-1]
+                bild_f.write(f".sphere {p_last[0]:.3f} {p_last[1]:.3f} {p_last[2]:.3f} 0.3\n")
+
         with open(output_file, 'w') as f:
             f.write("import chimera\n")
             f.write("from chimera import runCommand\n")
@@ -204,8 +250,14 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
             f.write("chimera.selection.setCurrent(atoms)\n")
             f.write("runCommand('show sel')\n")
             f.write("runCommand('repr stick sel')\n")
+            f.write(f"runCommand(\"open '{bild_file}'\")\n")
+            f.write("print('Linking BILD geometry to Model #0 (ensure your protein is loaded first)')\n")
+            f.write("try:\n")
+            f.write("    runCommand('matrixset ~0 #last')\n")
+            f.write("except Exception as e:\n")
+            f.write("    print('Warning: Failed to link BILD geometry to Model #0. Ensure a protein structure is loaded first.')\n")
 
-        logger.info(f"Chimera script written to {output_file} for frame {frame_idx}")
+        logger.info(f"Chimera script written to {output_file} for frame {frame_idx} (BILD geometry: {bild_file})")
 
     elif mode == "density":
         bild_file = os.path.abspath(output_file.replace('.py', '.bild'))
@@ -230,6 +282,12 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
         
     elif mode == "cluster":
         clusters = read_cluster_json(data_file)
+        if cluster_id is not None:
+            clusters = [c for c in clusters if c.get("cluster_id") == cluster_id]
+            if not clusters:
+                logger.warning(f"Cluster ID {cluster_id} not found in data.")
+                return
+
         bild_file = os.path.abspath(output_file.replace('.py', '.bild'))
         with open(bild_file, 'w') as bild_f:
             bild_f.write('.color orange\n')
@@ -261,7 +319,7 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
         logger.info(f"Chimera cluster script written to {output_file} (BILD geometry: {bild_file})")
 
 
-def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, output_file="pathways_viz"):
+def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, cluster_id=None, output_file="pathways_viz"):
     if not os.path.exists(data_file):
         logger.error(f"Data file {data_file} not found.")
         return
@@ -275,10 +333,10 @@ def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, o
         out = output_file
 
     if format == "vmd":
-        export_vmd_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx)
+        export_vmd_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx, cluster_id=cluster_id)
     elif format == "pymol":
-        export_pymol_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx)
+        export_pymol_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx, cluster_id=cluster_id)
     elif format == "chimera":
-        export_chimera_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx)
+        export_chimera_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx, cluster_id=cluster_id)
     else:
         logger.error(f"Unknown format: {format}")
