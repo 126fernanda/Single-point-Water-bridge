@@ -149,6 +149,7 @@ water_bridges_nw visualize \
 | `--format` | `vmd`, `pymol`, or `chimera`. |
 | `--mode` | `density` (all frames overlaid), `frame` (single frame), or `cluster` (clustered medoids). |
 | `--frame` | Frame index to visualize; required when `--mode frame`. |
+| `--cluster_id` | Specific cluster ID to visualize by its sequential rank (only applies when `--mode cluster`). |
 | `--output` | Output script filename or prefix (default: `pathways_viz`). |
 
 ## Solvent naming conventions

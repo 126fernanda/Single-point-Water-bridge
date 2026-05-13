@@ -68,6 +68,7 @@ def main():
     vis_parser.add_argument("--format", choices=["vmd", "pymol", "chimera"], default="vmd", help="Target visualization software.")
     vis_parser.add_argument("--mode", choices=["density", "frame", "cluster"], default="density", help="Visualization mode: 'density' (all frames), 'frame' (single frame), or 'cluster' (clustered medoids).")
     vis_parser.add_argument("--frame", type=int, default=None, help="Frame index to visualize (only used if mode='frame').")
+    vis_parser.add_argument("--cluster_id", type=int, default=None, help="Specific cluster ID to visualize (only used if mode='cluster'). If None, visualizes all clusters.")
     vis_parser.add_argument("--output", default="pathways_viz", help="Output script file name or prefix.")
 
     args = parser.parse_args()
@@ -106,6 +107,7 @@ def main():
             format=args.format,
             mode=args.mode,
             frame_idx=args.frame,
+            cluster_id=args.cluster_id,
             output_file=args.output
         )
 

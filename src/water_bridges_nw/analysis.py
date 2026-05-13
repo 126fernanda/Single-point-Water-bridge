@@ -189,7 +189,7 @@ def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, coarse_tri
             "cluster_id": 1,
             "size": 1,
             "occupancy": float(filtered_paths[0]['occupancy']),
-            "avg_probability": float(filtered_paths[0]['avg_prob']),
+            "avg_prob_Hquality": float(filtered_paths[0]['avg_prob']),
             "medoid_frame": medoid_frame,
             "mean_persistence_frames": mean_pers,
             "max_persistence_frames": max_pers,
@@ -299,7 +299,7 @@ def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, coarse_tri
             "cluster_id": int(label),
             "size": len(cluster_indices),
             "occupancy": float(occupancy),
-            "avg_probability": float(avg_prob),
+            "avg_prob_Hquality": float(avg_prob),
             "medoid_frame": medoid_frame,
             "mean_persistence_frames": mean_pers,
             "max_persistence_frames": max_pers,
@@ -308,6 +308,10 @@ def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, coarse_tri
 
     # Sort by occupancy descending
     clusters_data.sort(key=lambda x: x['occupancy'], reverse=True)
+
+    # Reassign cluster_ids sequentially (1 = highest occupancy)
+    for i, cluster in enumerate(clusters_data):
+        cluster["cluster_id"] = i + 1
 
     with open(output_file, 'w') as f:
         json.dump(clusters_data, f, indent=2)
