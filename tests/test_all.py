@@ -206,7 +206,7 @@ class TestVisualization(unittest.TestCase):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as f_out:
             out_name = f_out.name
 
-        cluster_pathways(data_file=json_name, coarse_trigger=5, min_frame_count=1, output_file=out_name)
+        cluster_pathways(data_file=json_name, coarse_trigger=5, output_file=out_name)
 
         # Verify bypass message
         bypass_msg_found = any("Dataset small" in call.args[0] and "Bypassing 9D coarse filter" in call.args[0] for call in mock_logger_info.call_args_list)
@@ -215,7 +215,7 @@ class TestVisualization(unittest.TestCase):
         mock_logger_info.reset_mock()
 
         # Test non-bypass logic: coarse_trigger=2 (we have 3 paths, so 3 > 2 -> run filter)
-        cluster_pathways(data_file=json_name, coarse_trigger=2, min_frame_count=1, output_file=out_name)
+        cluster_pathways(data_file=json_name, coarse_trigger=2, output_file=out_name)
 
         # Verify run message
         run_msg_found = any("Dataset large" in call.args[0] and "Performing coarse 9D screening pass" in call.args[0] for call in mock_logger_info.call_args_list)
