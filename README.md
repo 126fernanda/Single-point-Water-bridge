@@ -108,6 +108,7 @@ water_bridges_nw cluster \
 | `--threshold` | `6.0` | Fréchet distance threshold in Å for fine clustering. |
 | `--coarse_trigger` | `1000` | Number of paths below which the 9D coarse filter is bypassed for direct Fréchet calculation. |
 | `--coarse_threshold` | `threshold / sqrt(3)` | 9D Feature Vector distance threshold in Å for the coarse screening pass. |
+| `--max_paths` | `60000` | Hard cap on number of paths sent to the distance matrix. |
 | `--output` | `clustered_pathways.json` | Output JSON file for the cluster summary. |
 
 ### 2. Visualize
@@ -218,9 +219,9 @@ If persistence matters for your analysis, filter the `top_paths` output
 manually or apply the `--cluster` option, which groups paths by spatial
 similarity and reports per-cluster occupancy.
 
-**Very large path counts.** The clustering step uses a hard maximum cap (`max_paths=30000`)
-and requires paths to appear in at least a minimum number of frames (`min_frame_count=2`)
-to prevent memory bottlenecks. For long trajectories with extreme branching,
+**Very large path counts.** The clustering step uses a hard maximum cap (`max_paths=60000`)
+and requires a fully merged cluster to appear in at least two frames to prevent memory
+bottlenecks and filter out raw thermal noise. For long trajectories with extreme branching,
 the clustering step may truncate the least frequent paths. Use
 `--stride` to reduce frame count or increase `--min_depth` to
 reduce the number of short paths before enabling `--cluster`.

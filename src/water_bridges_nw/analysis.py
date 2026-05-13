@@ -34,7 +34,7 @@ def compute_persistence(frame_indices_sorted, total_frames, stride):
 
     return mean_persistence, max_persistence
 
-def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, coarse_trigger=1000, min_frame_count=2, max_paths=30000, output_file="clustered_pathways.json"):
+def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, coarse_trigger=1000, max_paths=60000, output_file="clustered_pathways.json"):
     """
     Reads JSONL trajectory data and performs temporal clustering to identify collective pathways
     using a Hybrid 9D-Vector representation and frequency pre-filtering.
@@ -90,23 +90,22 @@ def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, coarse_tri
             json.dump([], f, indent=2)
         return
 
-    # Pre-filter
+    # Build candidate list — all unique paths proceed to spatial clustering.
     filtered_paths = []
     for nodes, data in unique_paths.items():
-        if len(data['frames']) >= min_frame_count:
-            avg_prob = np.mean(data['probs'])
-            avg_9d = np.mean(data['9d_vectors'], axis=0)
-            filtered_paths.append({
-                'nodes': nodes,
-                'frames': data['frames'],
-                'occupancy': len(data['frames']) / total_frames if total_frames > 0 else 0.0,
-                'avg_prob': avg_prob,
-                'coords': data['coords'],
-                'avg_9d': avg_9d
-            })
+        avg_prob = np.mean(data['probs'])
+        avg_9d = np.mean(data['9d_vectors'], axis=0)
+        filtered_paths.append({
+            'nodes': nodes,
+            'frames': data['frames'],
+            'occupancy': len(data['frames']) / total_frames if total_frames > 0 else 0.0,
+            'avg_prob': avg_prob,
+            'coords': data['coords'],
+            'avg_9d': avg_9d
+        })
 
     n_filtered = len(filtered_paths)
-    logger.info(f"Filtered to {n_filtered} unique pathways appearing in >= {min_frame_count} frames.")
+    logger.info(f"Loaded {n_filtered} unique path topologies for spatial clustering.")
 
     if n_filtered == 0:
         logger.info("No paths remained after frequency pre-filtering.")
@@ -117,8 +116,10 @@ def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, coarse_tri
     # Memory Safety Cap
     if n_filtered > max_paths:
         logger.warning(f"Number of paths ({n_filtered}) exceeds maximum cap ({max_paths}). "
-                       f"Truncating to top {max_paths} most frequent paths to prevent memory crash.")
-        filtered_paths.sort(key=lambda x: x['occupancy'], reverse=True)
+                       f"Truncating to top {max_paths} paths to prevent memory crash. "
+                       "Tie-breaking identical occupancies using average bond probability.")
+        # Sort primarily by occupancy, secondarily by avg_prob (thermodynamic quality)
+        filtered_paths.sort(key=lambda x: (x['occupancy'], x['avg_prob']), reverse=True)
         filtered_paths = filtered_paths[:max_paths]
         n_filtered = len(filtered_paths)
 
@@ -260,10 +261,10 @@ def cluster_pathways(data_file, threshold=6.0, coarse_threshold=None, coarse_tri
         for p in cluster_paths:
             cluster_frames.update(p['frames'])
 
-        if len(cluster_frames) < min_frame_count:
+        if len(cluster_frames) < 2:
             logger.debug(
                 f"Cluster {label} discarded: merged occupancy "
-                f"({len(cluster_frames)} frames) < min_frame_count ({min_frame_count})."
+                f"({len(cluster_frames)} frames) < 2 (minimum stability threshold)."
             )
             continue
 
