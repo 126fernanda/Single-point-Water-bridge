@@ -81,7 +81,7 @@ water_bridges_nw calculate \
 | Option | Default | Description |
 |---|---|---|
 | `--topo` | required | Topology file (.pdb, .tpr, …) |
-| `--traj` | — | Trajectory file (.xtc, .dcd, …). Omit to evaluate topology only. |
+| `--traj` | required | Trajectory file (.xtc, .dcd, …). Omit to evaluate topology only. |
 | `--root` | required | MDAnalysis selection string for the root atom(s) (e.g. `"resname LIG"`). |
 | `--water` | `"resname SOL or resname WAT or resname HOH"` | Solvent selection string. |
 | `--stride` | `1` | Process every Nth frame. A warning is issued when `stride=1` and the trajectory exceeds 1000 frames. |
