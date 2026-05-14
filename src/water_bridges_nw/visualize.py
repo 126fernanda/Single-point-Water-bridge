@@ -22,7 +22,7 @@ def read_jsonl(data_file):
                 frames[f_idx].extend(obj['paths'])
     return frames
 
-def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", frame_idx=None, cluster_id=None):
+def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", frame_idx=None, cluster_id=None, max_bond_draw_dist=6.0):
     """
     Generates a Tcl script to visualize the network in VMD using dynamic selections.
     """
@@ -67,7 +67,9 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
                 for i in range(len(coords) - 1):
                     p1 = coords[i]
                     p2 = coords[i+1]
-                    f.write(f"graphics top cylinder {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} {{{p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f}}} radius 0.2\n")
+                    if sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5 > max_bond_draw_dist:
+                        continue  # PBC artifact: segment spans > max_bond_draw_dist Å, skip
+                    f.write(f"graphics top cylinder {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} {{{p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f}}} radius 0.2 resolution 20 filled yes\n")
                     f.write(f"graphics top sphere {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} radius 0.3\n")
 
                 # write the last sphere
@@ -92,7 +94,10 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
                     for i in range(len(coords) - 1):
                         p1 = coords[i]
                         p2 = coords[i+1]
-                        f.write(f"graphics top cylinder {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} {{{p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f}}} radius 0.1\n")
+                        if sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5 > max_bond_draw_dist:
+                            continue  # PBC artifact: segment spans > max_bond_draw_dist Å, skip
+                        f.write(f"graphics top cylinder {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} {{{p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f}}} radius 0.1 resolution 20 filled yes\n")
+                        f.write(f"graphics top sphere {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} radius 0.3\n")
 
         logger.info(f"VMD density script written to {output_file}")
         
@@ -117,7 +122,9 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
                 for i in range(len(coords) - 1):
                     p1 = coords[i]
                     p2 = coords[i+1]
-                    f.write(f"graphics top cylinder {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} {{{p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f}}} radius 0.2\n")
+                    if sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5 > max_bond_draw_dist:
+                        continue  # PBC artifact: segment spans > max_bond_draw_dist Å, skip
+                    f.write(f"graphics top cylinder {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} {{{p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f}}} radius 0.2 resolution 20 filled yes\n")
                     f.write(f"graphics top sphere {{{p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f}}} radius 0.3\n")
                 
                 # write the last sphere
@@ -127,7 +134,7 @@ def export_vmd_script(data_file, output_file="draw_pathways.tcl", mode="frame", 
         logger.info(f"VMD cluster script written to {output_file}")
 
 
-def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None, cluster_id=None):
+def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None, cluster_id=None, max_bond_draw_dist=6.0):
     """
     Generates a Python script to visualize the network in PyMOL as CGO.
     """
@@ -162,8 +169,12 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
                 if len(coords) < 2:
                     continue
                 for i in range(len(coords) - 1):
-                    write_cylinder(coords[i], coords[i+1], radius=0.2)
-                    write_sphere(coords[i], radius=0.3)
+                    p1 = coords[i]
+                    p2 = coords[i+1]
+                    if sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5 > max_bond_draw_dist:
+                        continue  # PBC artifact filter
+                    write_cylinder(p1, p2, radius=0.2)
+                    write_sphere(p1, radius=0.3)
                 write_sphere(coords[-1], radius=0.3)
 
             logger.info(f"PyMOL script written to {output_file} for frame {frame_idx}")
@@ -173,7 +184,11 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
                 for path in paths:
                     coords = path["coords"]
                     for i in range(len(coords) - 1):
-                        write_cylinder(coords[i], coords[i+1], radius=0.05, color=[0.0, 0.8, 0.8])
+                        p1 = coords[i]
+                        p2 = coords[i+1]
+                        if sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5 > max_bond_draw_dist:
+                            continue  # PBC artifact filter
+                        write_cylinder(p1, p2, radius=0.05, color=[0.0, 0.8, 0.8])
             logger.info(f"PyMOL density script written to {output_file}")
             
         elif mode == "cluster":
@@ -189,8 +204,12 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
                 if len(coords) < 2:
                     continue
                 for i in range(len(coords) - 1):
-                    write_cylinder(coords[i], coords[i+1], radius=0.2, color=[1.0, 0.5, 0.0], alpha=1.0)
-                    write_sphere(coords[i], radius=0.3, color=[1.0, 0.5, 0.0])
+                    p1 = coords[i]
+                    p2 = coords[i+1]
+                    if sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5 > max_bond_draw_dist:
+                        continue  # PBC artifact filter
+                    write_cylinder(p1, p2, radius=0.2, color=[1.0, 0.5, 0.0], alpha=1.0)
+                    write_sphere(p1, radius=0.3, color=[1.0, 0.5, 0.0])
                 write_sphere(coords[-1], radius=0.3, color=[1.0, 0.5, 0.0])
             logger.info(f"PyMOL cluster script written to {output_file}")
 
@@ -199,7 +218,7 @@ def export_pymol_script(data_file, output_file="draw_pathways.py", mode="frame",
             f.write("cmd.set('cgo_transparency', 0.8, 'water_network')\n")
 
 
-def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None, cluster_id=None):
+def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame", frame_idx=None, cluster_id=None, max_bond_draw_dist=6.0):
     """
     Generates a Python script to visualize the network in UCSF Chimera.
     """
@@ -234,6 +253,8 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
                 for i in range(len(coords) - 1):
                     p1 = coords[i]
                     p2 = coords[i+1]
+                    if sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5 > max_bond_draw_dist:
+                        continue  # PBC artifact filter
                     bild_f.write(f".cylinder {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} {p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f} 0.2\n")
                     bild_f.write(f".sphere {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} 0.3\n")
 
@@ -270,6 +291,8 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
                     for i in range(len(coords) - 1):
                         p1 = coords[i]
                         p2 = coords[i+1]
+                        if sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5 > max_bond_draw_dist:
+                            continue  # PBC artifact filter
                         bild_f.write(f".cylinder {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} {p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f} 0.1\n")
         with open(output_file, 'w') as f:
             f.write("from chimera import runCommand, openModels\n")
@@ -301,6 +324,8 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
                 for i in range(len(coords) - 1):
                     p1 = coords[i]
                     p2 = coords[i+1]
+                    if sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5 > max_bond_draw_dist:
+                        continue  # PBC artifact filter
                     bild_f.write(f".cylinder {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} {p2[0]:.3f} {p2[1]:.3f} {p2[2]:.3f} 0.2\n")
                     bild_f.write(f".sphere {p1[0]:.3f} {p1[1]:.3f} {p1[2]:.3f} 0.3\n")
 
@@ -319,7 +344,7 @@ def export_chimera_script(data_file, output_file="draw_pathways.py", mode="frame
         logger.info(f"Chimera cluster script written to {output_file} (BILD geometry: {bild_file})")
 
 
-def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, cluster_id=None, output_file="pathways_viz"):
+def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, cluster_id=None, output_file="pathways_viz", max_bond_draw_dist=6.0):
     if not os.path.exists(data_file):
         logger.error(f"Data file {data_file} not found.")
         return
@@ -333,10 +358,10 @@ def run_visualization(data_file, format="vmd", mode="density", frame_idx=None, c
         out = output_file
 
     if format == "vmd":
-        export_vmd_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx, cluster_id=cluster_id)
+        export_vmd_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx, cluster_id=cluster_id, max_bond_draw_dist=max_bond_draw_dist)
     elif format == "pymol":
-        export_pymol_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx, cluster_id=cluster_id)
+        export_pymol_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx, cluster_id=cluster_id, max_bond_draw_dist=max_bond_draw_dist)
     elif format == "chimera":
-        export_chimera_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx, cluster_id=cluster_id)
+        export_chimera_script(data_file, output_file=out, mode=mode, frame_idx=frame_idx, cluster_id=cluster_id, max_bond_draw_dist=max_bond_draw_dist)
     else:
         logger.error(f"Unknown format: {format}")

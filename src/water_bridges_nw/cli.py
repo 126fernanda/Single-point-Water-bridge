@@ -70,6 +70,11 @@ def main():
     vis_parser.add_argument("--frame", type=int, default=None, help="Frame index to visualize (only used if mode='frame').")
     vis_parser.add_argument("--cluster_id", type=int, default=None, help="Specific cluster ID to visualize (only used if mode='cluster'). If None, visualizes all clusters.")
     vis_parser.add_argument("--output", default="pathways_viz", help="Output script file name or prefix.")
+    vis_parser.add_argument("--max_bond_draw_dist", type=float, default=6.0,
+        help="Maximum Euclidean distance (Å) between two connected path atoms "
+             "before the cylinder is treated as a PBC artifact and skipped. "
+             "Should be slightly larger than your --coarse_cutoff value. "
+             "Default: 6.0 Å (safe for the default coarse_cutoff of 4.5 Å).")
 
     args = parser.parse_args()
 
@@ -108,7 +113,8 @@ def main():
             mode=args.mode,
             frame_idx=args.frame,
             cluster_id=args.cluster_id,
-            output_file=args.output
+            output_file=args.output,
+            max_bond_draw_dist=args.max_bond_draw_dist,
         )
 
 if __name__ == "__main__":
