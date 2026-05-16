@@ -1,6 +1,6 @@
-# water_bridges-nw
+# Gephyra
 
-`water_bridges-nw` is a Python framework for the discovery and statistical
+`Gephyra` is a Python framework for the discovery and statistical
 analysis of water-mediated hydrogen-bond networks (water bridges) in molecular
 dynamics (MD) trajectories. It combines a continuous probabilistic H-bond
 scoring model with graph-based path enumeration to identify multi-order water
