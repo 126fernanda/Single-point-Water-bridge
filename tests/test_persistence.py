@@ -28,7 +28,7 @@ sys.modules['scipy.cluster.hierarchy'] = MagicMock()
 sys.modules['similaritymeasures'] = MagicMock()
 
 # Now import the function to test
-from water_bridges_nw.analysis import compute_persistence
+from gephyra.analysis import compute_persistence
 
 class TestComputePersistence(unittest.TestCase):
     def test_empty_list(self):

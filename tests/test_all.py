@@ -6,10 +6,10 @@ from unittest.mock import patch
 import MDAnalysis as mda
 import numpy as np
 
-from water_bridges_nw.math_utils import switching_function, calculate_hbond_probability
-from water_bridges_nw.core import build_graph, compute_edge_probabilities, traverse_network
-from water_bridges_nw.visualize import export_vmd_script, export_pymol_script, run_visualization
-from water_bridges_nw.analysis import sanitize_csv_field
+from gephyra.math_utils import switching_function, calculate_hbond_probability
+from gephyra.core import build_graph, compute_edge_probabilities, traverse_network
+from gephyra.visualize import export_vmd_script, export_pymol_script, run_visualization
+from gephyra.analysis import sanitize_csv_field
 
 class TestAnalysis(unittest.TestCase):
     def test_sanitize_csv_field(self):
@@ -123,12 +123,12 @@ class TestVisualization(unittest.TestCase):
         os.remove(temp_name)
         os.remove(json_name)
 
-    @patch('water_bridges_nw.visualize.logger.error')
+    @patch('gephyra.visualize.logger.error')
     def test_run_visualization_file_not_found(self, mock_logger_error):
         run_visualization("non_existent_file.jsonl", format="vmd")
         mock_logger_error.assert_called_once_with("Data file non_existent_file.jsonl not found.")
 
-    @patch('water_bridges_nw.visualize.export_vmd_script')
+    @patch('gephyra.visualize.export_vmd_script')
     def test_run_visualization_vmd_routing(self, mock_export):
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             pass
@@ -138,7 +138,7 @@ class TestVisualization(unittest.TestCase):
         finally:
             os.remove(temp_file.name)
 
-    @patch('water_bridges_nw.visualize.export_pymol_script')
+    @patch('gephyra.visualize.export_pymol_script')
     def test_run_visualization_pymol_routing(self, mock_export):
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             pass
@@ -148,7 +148,7 @@ class TestVisualization(unittest.TestCase):
         finally:
             os.remove(temp_file.name)
 
-    @patch('water_bridges_nw.visualize.export_chimera_script')
+    @patch('gephyra.visualize.export_chimera_script')
     def test_run_visualization_chimera_routing(self, mock_export):
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             pass
@@ -158,7 +158,7 @@ class TestVisualization(unittest.TestCase):
         finally:
             os.remove(temp_file.name)
 
-    @patch('water_bridges_nw.visualize.logger.error')
+    @patch('gephyra.visualize.logger.error')
     def test_run_visualization_unknown_format(self, mock_logger_error):
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             pass
@@ -169,8 +169,8 @@ class TestVisualization(unittest.TestCase):
             os.remove(temp_file.name)
 
 
-    @patch('water_bridges_nw.visualize.read_cluster_json')
-    @patch('water_bridges_nw.visualize.read_jsonl')
+    @patch('gephyra.visualize.read_cluster_json')
+    @patch('gephyra.visualize.read_jsonl')
     def test_export_vmd_cluster_script(self, mock_read_jsonl, mock_read_cluster_json):
         mock_read_cluster_json.return_value = [
             {"cluster_id": 0, "size": 10, "medoid_coords": [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]}
@@ -187,9 +187,9 @@ class TestVisualization(unittest.TestCase):
 
         os.remove(temp_name)
 
-    @patch('water_bridges_nw.analysis.logger.info')
+    @patch('gephyra.analysis.logger.info')
     def test_cluster_coarse_trigger(self, mock_logger_info):
-        from water_bridges_nw.analysis import cluster_pathways
+        from gephyra.analysis import cluster_pathways
 
         # Create a dummy jsonl file with 3 distinct paths
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jsonl", mode='w') as f_json:

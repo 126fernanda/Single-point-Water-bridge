@@ -14,7 +14,7 @@ def setup_logging():
 
 def main():
     setup_logging()
-    parser = argparse.ArgumentParser(description="water_bridges-Nw: A hybrid algorithm for water network detection.")
+    parser = argparse.ArgumentParser(description="Gephyra: A network-graph and Fréchet clustering framework for water network detection.")
     subparsers = parser.add_subparsers(dest="command", help="Sub-commands")
     subparsers.required = True
 
