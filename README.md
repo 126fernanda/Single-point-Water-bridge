@@ -1,10 +1,6 @@
 # Gephyra
 
-`Gephyra` is a Python framework for the discovery and statistical
-analysis of water-mediated hydrogen-bond networks (water bridges) in molecular
-dynamics (MD) trajectories. It combines a continuous probabilistic H-bond
-scoring model with graph-based path enumeration to identify multi-order water
-bridge pathways and their temporal occupancy across simulation frames.
+Gephyra (derived from the Ancient Greek word for "bridge") is a network-graph and Fréchet clustering framework engineered for the discovery, spatial tracking, and statistical analysis of functional, macromolecularly confined water-bridge channels in molecular dynamics trajectories.
 
 ## Features
 
@@ -66,7 +62,7 @@ pip install -e .
 ### 1. Calculate
 
 ```bash
-water_bridges_nw calculate \
+gephyra calculate \
   --topo  my_topology.pdb \
   --traj  my_trajectory.xtc \
   --root  "resname LIG and name O1" \
@@ -96,7 +92,7 @@ water_bridges_nw calculate \
 
 ```bash
 # Cluster output pathways into collective behaviour groups
-water_bridges_nw cluster \
+gephyra cluster \
   --data results.jsonl \
   --threshold 6.0 \
   --output clustered_pathways.json
@@ -115,30 +111,30 @@ water_bridges_nw cluster \
 
 ```bash
 # Clustered medoids (supports vmd, pymol, chimera)
-water_bridges_nw visualize \
+gephyra visualize \
   --data clustered_pathways.json --format vmd --mode cluster \
   --output cluster_medoids.tcl
 
-water_bridges_nw visualize \
+gephyra visualize \
   --data clustered_pathways.json --format pymol --mode cluster \
   --output cluster_medoids.py
 
-water_bridges_nw visualize \
+gephyra visualize \
   --data clustered_pathways.json --format chimera --mode cluster \
   --output cluster_medoids_chimera.py
 
 # Density overlay across all frames — PyMOL
-water_bridges_nw visualize \
+gephyra visualize \
   --data results.jsonl --format pymol --mode density \
   --output network_density.py
 
 # Single-frame selection — VMD
-water_bridges_nw visualize \
+gephyra visualize \
   --data results.jsonl --format vmd --mode frame --frame 10 \
   --output frame_10.tcl
 
 # Single-frame selection — UCSF Chimera
-water_bridges_nw visualize \
+gephyra visualize \
   --data results.jsonl --format chimera --mode frame --frame 10 \
   --output frame_10.py
 ```
