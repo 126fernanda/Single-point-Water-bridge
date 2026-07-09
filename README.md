@@ -34,6 +34,21 @@ Gephyra (derived from the Ancient Greek word for "bridge") is a network-graph an
   persistence statistics (`mean_persistence_frames` and `max_persistence_frames`
   accounting for stride), and a representative full-coordinate medoid geometry.
 
+### Understanding `PHquality` (Network Pathway Quality)
+
+In the output files (e.g., `clustered_pathways.json`), the metric labeled `avg_prob_Hquality` (often referred to as `PHquality`) does **not** represent a standard fractional probability bounded between [0, 1]. Instead, it functions as a **statistical sum of network microstates**.
+
+**How it is calculated:**
+For a given spatial endpoint, the algorithm evaluates all parallel microstates (unique atomic permutations) of water chains connecting the root to that solvent region. The quality score is the sum of the exponentially weighted edge probabilities across all these routing permutations:
+
+$$Z = \sum e^{-w}$$
+
+Where $w$ is the accumulated logarithmic penalty of the path geometry (derived strictly from distance, angle, and steric switching functions).
+
+**How to interpret this value:**
+- **Values can exceed 1.0:** Because this is an aggregated sum of multiple available structural routes, highly branched or degenerate channels with multiple parallel permutations will accumulate scores > 1.0.
+- **Physical meaning:** A higher `PHquality` indicates a high degree of **topological degeneracy** and **geometric robustness**. It measures how many favorable, pre-organized hydrogen-bond network permutations exist within that spatial channel, rather than evaluating the thermodynamic energy of the system.
+
 - **Multi-phase execution:**
   - **Phase 1 — `calculate`:** Processes trajectory frames via MDAnalysis
     and NetworkX. Streams output as JSON Lines (`.jsonl`) and optional `.csv`
