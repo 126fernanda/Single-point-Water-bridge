@@ -230,3 +230,22 @@ bottlenecks and filter out raw thermal noise. For long trajectories with extreme
 the clustering step may truncate the least frequent paths. Use
 `--stride` to reduce frame count or increase `--min_depth` to
 reduce the number of short paths before enabling `--cluster`.
+
+
+## Citation
+
+If you use **Gephyra** in your research, please cite it as follows:
+
+> Peralta-Morales, M. F., Sciortino, G. & Maréchal, J.-D. Gephyra. *GitHub* https://github.com/insilichem/Gephyra (2026).
+
+### BibTeX
+```bibtex
+@misc{PeraltaMorales2026Gephyra,
+  author       = {Peralta-Morales, Mar{\'i}a Fernanda and Sciortino, Giuseppe and Mar{\'e}chal, Jean-Didier},
+  title        = {Gephyra: Water bridge network analysis},
+  year         = {2026},
+  publisher    = {GitHub},
+  journal      = {GitHub repository},
+  howpublished = {\url{[https://github.com/insilichem/Gephyra](https://github.com/insilichem/Gephyra)}}
+}
+
